@@ -802,7 +802,7 @@ window.changeAdminPass=async function(){const p=document.getElementById('new-adm
 window.changeStaffPass=async function(){const p=document.getElementById('new-staff-pass').value;if(p.length<4){showToast('パスワードは4文字以上');return;}cfg.staffPass=p;await saveCfg();document.getElementById('new-staff-pass').value='';showToast('スタッフパスワードを変更しました');}
 
 function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800);}
-function updateClock(){const now=new Date();const e=document.getElementById('s-clk');if(e)e.textContent=now.toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit',second:'2-digit'});const d=document.getElementById('s-dt');if(d)d.textContent=now.toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric',weekday:'short'});}
+function updateClock(){const now=new Date();const e=document.getElementById('s-clk');if(e)e.textContent=now.toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});const d=document.getElementById('s-dt');if(d)d.textContent=now.toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric',weekday:'short'});}
 updateClock();setInterval(updateClock,1000);
 
 async function init(){
