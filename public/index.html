@@ -519,7 +519,6 @@ function updateStaffUI(){
   const bk=brkKey(),hasBrk=breaks[bk];
   const brkEl=document.getElementById('brk-check');
   if(!inR)brkEl.className='break-check dis';
-  else if(st==='out'&&outR)brkEl.className='break-check dis'+(hasBrk?' checked':'');
   else brkEl.className='break-check'+(hasBrk?' checked':'');
   document.getElementById('brk-time').textContent=hasBrk&&typeof hasBrk==='string'?hasBrk:'';
 }
@@ -529,7 +528,7 @@ window.toggleBreak=async function(){
   const key=`${cu.storeId}_${cu.staffId}`,st=getSt(key);
   const today=todayStr(),mine=records.filter(r=>r.storeId===cu.storeId&&r.staffId===cu.staffId&&new Date(r.time).toLocaleDateString('ja-JP')===today);
   const inR=mine.find(r=>r.type==='in'),outR=mine.find(r=>r.type==='out');
-  if(!inR||(st==='out'&&outR))return;
+  if(!inR)return;
   const bk=brkKey();
   if(breaks[bk]){
     delete breaks[bk];
