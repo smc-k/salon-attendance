@@ -198,6 +198,23 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .modal-btn-save{padding:8px 16px;border-radius:8px;border:none;background:#D4537E;color:#fff;font-size:13px;font-weight:500;cursor:pointer;}
 .modal-btn-save:hover{background:#993556;}
 
+
+.edit-time-btn{padding:2px 7px;border-radius:5px;border:0.5px solid var(--color-border-secondary);background:transparent;color:var(--color-text-secondary);cursor:pointer;font-size:11px;}
+.edit-time-btn:hover{background:var(--color-background-secondary);}
+.tag{font-size:10px;padding:1px 5px;border-radius:8px;white-space:nowrap;margin-right:2px;}
+.tag-ot{background:#FBEAF0;color:#993556;}
+.tag-night{background:#EEEDFE;color:#3C3489;}
+.tag-hol{background:#FCEBEB;color:#A32D2D;}
+.ot-bar-wrap{height:6px;background:#eee;border-radius:3px;overflow:hidden;margin-bottom:4px;}
+.ot-bar{height:100%;border-radius:3px;}
+.wage-section{background:#F7F3FD;border:0.5px solid #D5C5F5;border-radius:8px;padding:10px 12px;margin-top:8px;}
+.wage-title{font-size:11px;font-weight:500;color:#5B3F9E;margin-bottom:6px;}
+.wage-row{display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:0.5px solid #E8DEF8;font-size:12px;}
+.wage-row:last-child{border-bottom:none;}
+.wage-label{color:#666;}
+.wage-val{color:#333;font-weight:500;}
+.wage-total{color:#3C3489;font-weight:700;font-size:14px;}
+
 .toast{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:#fff;border:1px solid #ddd;border-radius:8px;padding:10px 20px;font-size:13px;opacity:0;transition:opacity 0.2s;pointer-events:none;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,0.1);}
 .toast.show{opacity:1;}
 .empty{text-align:center;color:#888;font-size:13px;padding:24px;}
@@ -400,6 +417,34 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   </div>
 </div>
 
+
+<!-- 打刻時刻修正モーダル -->
+<div class="modal-overlay" id="punch-modal" style="display:none;">
+  <div class="modal-card">
+    <div class="modal-title"><i class="ti ti-edit" style="font-size:15px;vertical-align:-2px;margin-right:6px;"></i>打刻時刻の修正</div>
+    <div style="font-size:12px;color:#888;margin-bottom:12px;" id="punch-modal-date"></div>
+    <input type="hidden" id="pm-store-id"/>
+    <input type="hidden" id="pm-staff-id"/>
+    <input type="hidden" id="pm-date"/>
+    <div class="modal-field">
+      <label>出勤時刻</label>
+      <input type="time" id="pm-in"/>
+    </div>
+    <div class="modal-field">
+      <label>退勤時刻</label>
+      <input type="time" id="pm-out"/>
+    </div>
+    <div class="modal-field">
+      <label>修正理由（任意）</label>
+      <input type="text" id="pm-reason" placeholder="例：打刻忘れのため修正"/>
+    </div>
+    <div class="modal-btns">
+      <button class="modal-btn-cancel" onclick="closePunchModal()">キャンセル</button>
+      <button class="modal-btn-save" onclick="savePunchEdit()">保存</button>
+    </div>
+  </div>
+</div>
+
 <!-- スタッフ編集モーダル -->
 <div class="modal-overlay" id="staff-modal" style="display:none;">
   <div class="modal-card">
@@ -461,6 +506,7 @@ let cfg={stores:[],staff:{},adminPass:'admin123',staffPass:'staff123',nextStaffI
   otMonthlyLimit:OT_MONTHLY_DEFAULT, otYearlyLimit:OT_YEARLY_DEFAULT, regHours:REG_HOURS_DEFAULT};
 let records=[],statuses={},breaks={};
 let cu=null,selRole=null,uiIv=null,selectedStaffIds=new Set();
+let manualAdjustments={};
 let loginStoreId=null,loginStaffId=null;
 
 const todayStr=()=>new Date().toLocaleDateString('ja-JP');
@@ -897,10 +943,15 @@ function renderMonthlyReport(){
   const stores=sf?cfg.stores.filter(s=>s.id==sf):cfg.stores;
   const selStaff=stores.flatMap(store=>(cfg.staff[store.id]||[]).map(s=>({...s,storeId:store.id,storeName:store.name}))).filter(s=>selectedStaffIds.has(`${s.storeId}_${s.id}`));
   const monthLimit=(cfg.otMonthlyLimit||OT_MONTHLY_DEFAULT)*60;
-  const yearLimit=(cfg.otYearlyLimit||OT_YEARLY_DEFAULT)*60;
 
   area.innerHTML=selStaff.map(s=>{
+    const staffData=(cfg.staff[s.storeId]||[]).find(x=>x.id===s.id);
+    const hourlyWage=staffData?.hourlyWage||0;
+    const rate=hourlyWage/60;
     let totalDays=0,totalMin=0,brkDays=0,totalOTMin=0;
+    let totalNormalWage=0,totalOTExtra=0,totalNightExtra=0,totalHolExtra=0;
+    let manualAdj=manualAdjustments[`${s.storeId}_${s.id}_${year}_${month}`]||0;
+
     const rows=days.map(d=>{
       const dateStr=d.toLocaleDateString('ja-JP'),wd=WDAYS[d.getDay()];
       const w=calcWork(s.storeId,s.id,dateStr);
@@ -909,71 +960,133 @@ function renderMonthlyReport(){
       const otMin=calcOvertimeMin(w.workMin);
       const sp=w.inTime&&w.outTime?calcSpecialHours(w.inTime,w.outTime):{nightMin:0,holidayMin:0,normalMin:0};
       const isHoliday=d.getDay()===0;
-      if(w.inTime){totalDays++;if(w.workMin)totalMin+=w.workMin;if(hasBrk)brkDays++;totalOTMin+=otMin;}
+      if(w.inTime){
+        totalDays++;
+        if(w.workMin)totalMin+=w.workMin;
+        if(hasBrk)brkDays++;
+        totalOTMin+=otMin;
+        if(hourlyWage){
+          totalNormalWage+=(sp.normalMin+sp.holidayMin+sp.nightMin)*rate;
+          totalOTExtra+=otMin*rate*0.25;
+          totalNightExtra+=sp.nightMin*rate*NIGHT_RATE;
+          totalHolExtra+=sp.holidayMin*rate*HOLIDAY_RATE;
+        }
+      }
       const wdColor=d.getDay()===0?'color:#E05050':d.getDay()===6?'color:#2B7BD4':'';
-      const otBadge=otMin>0?`<span style="font-size:10px;color:#993556;">${fmt(otMin)}残業</span>`:'';
-      const nightBadge=sp.nightMin>0?`<span style="font-size:10px;color:#5B3F9E;">深夜${fmt(sp.nightMin)}</span>`:'';
-      const holBadge=isHoliday&&w.inTime?`<span style="font-size:10px;color:#E05050;">休日出勤</span>`:'';
-      return `<tr class="${w.inTime?'worked':''}">
+      const otBadge=otMin>0?`<span class="tag tag-ot">${fmt(otMin)}残業</span>`:'';
+      const nightBadge=sp.nightMin>0?`<span class="tag tag-night">深夜${fmt(sp.nightMin)}</span>`:'';
+      const holBadge=isHoliday&&w.inTime?`<span class="tag tag-hol">休日出勤</span>`:'';
+      const editBtn=`<button class="edit-time-btn" onclick="openPunchModal(${s.storeId},${s.id},'${dateStr}')" title="時刻修正"><i class="ti ti-edit" style="font-size:11px;"></i></button>`;
+      return `<tr>
         <td style="${wdColor}font-weight:${w.inTime?'500':'400'}">${d.getDate()}日(${wd})</td>
         <td>${w.inTime?fmtT(w.inTime):'—'}</td>
         <td>${w.outTime?fmtT(w.outTime):'—'}</td>
         <td style="font-weight:${w.workMin?'500':'400'}">${fmt(w.workMin)}</td>
         <td>${otBadge}${nightBadge}${holBadge}</td>
         <td style="text-align:center;">${hasBrk?'<span class="badge b-brk" style="font-size:10px;">取得</span>':'—'}</td>
-        <td style="color:#888;font-size:11px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${memos.map(m=>m.memo).join(' / ')||''}</td>
+        <td style="color:#888;font-size:11px;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${memos.map(m=>m.memo).join(' / ')||''}</td>
+        <td>${editBtn}</td>
       </tr>`;
     }).join('');
 
-    // 36協定バー
     const mPct=Math.min(Math.round(totalOTMin/monthLimit*100),100);
-    const barColor=mPct>=100?'#E05050':mPct>=80?'#EF9F27':'#639922';
-    const otAlert=mPct>=100?`<span style="color:#E05050;font-weight:600;">🚨 上限超過</span>`:mPct>=80?`<span style="color:#EF9F27;font-weight:600;">⚠️ 注意</span>`:`<span style="color:#639922;">✅ 正常</span>`;
-
-    // 賃金計算
-    const wage=calcWage(s.storeId,s.id,year,month);
-    const wageHtml=wage?`
+    const barColor=mPct>=100?'#E24B4A':mPct>=80?'#EF9F27':'#639922';
+    const otAlert=mPct>=100?`<span style="color:#A32D2D;font-weight:500;">🚨 上限超過</span>`:mPct>=80?`<span style="color:#854F0B;font-weight:500;">⚠️ 注意</span>`:`<span style="color:#3B6D11;">✅ 正常</span>`;
+    const grandTotal=totalNormalWage+totalOTExtra+totalNightExtra+totalHolExtra+manualAdj;
+    const wageHtml=hourlyWage?`
       <div class="wage-section">
-        <div class="wage-title">💰 賃金計算（管理者確認用）</div>
-        <div class="wage-row"><span class="wage-label">時給</span><span class="wage-val">${fmtYen(wage.hourlyWage)}</span></div>
-        <div class="wage-row"><span class="wage-label">通常勤務（${fmt(wage.normalMin+wage.otMin)}）</span><span class="wage-val">${fmtYen(wage.normalWage+wage.otMin*(wage.hourlyWage/60))}</span></div>
-        <div class="wage-row"><span class="wage-label">　うち残業割増25%（${fmt(wage.otMin)}）</span><span class="wage-val">+${fmtYen(wage.otExtra)}</span></div>
-        <div class="wage-row"><span class="wage-label">深夜割増25%（${fmt(wage.nightMin)}）</span><span class="wage-val">+${fmtYen(wage.nightExtra)}</span></div>
-        <div class="wage-row"><span class="wage-label">休日割増35%（${fmt(wage.holidayMin)}）</span><span class="wage-val">+${fmtYen(wage.holidayExtra)}</span></div>
-        <div class="wage-row"><span class="wage-label">概算合計</span><span class="wage-total">${fmtYen(wage.normalWage+wage.otMin*(wage.hourlyWage/60)+wage.nightExtra+wage.holidayExtra+wage.otExtra)}</span></div>
-      </div>`:'<div style="font-size:11px;color:#888;margin-top:6px;">※ 時給を登録すると賃金計算が表示されます</div>';
+        <div class="wage-title"><i class="ti ti-currency-yen" style="font-size:12px;vertical-align:-1px;"></i> 賃金計算（管理者確認用）　時給 ¥${hourlyWage.toLocaleString()}</div>
+        <div class="wage-row"><span class="wage-label">通常勤務</span><span class="wage-val">${fmtYen(totalNormalWage)}</span></div>
+        <div class="wage-row"><span class="wage-label">　うち残業割増 25%（${fmt(totalOTMin)}）</span><span class="wage-val" style="color:#3B6D11;">+ ${fmtYen(totalOTExtra)}</span></div>
+        <div class="wage-row"><span class="wage-label">深夜割増 25%</span><span class="wage-val" style="color:#3B6D11;">+ ${fmtYen(totalNightExtra)}</span></div>
+        <div class="wage-row"><span class="wage-label">休日割増 35%</span><span class="wage-val" style="color:#3B6D11;">+ ${fmtYen(totalHolExtra)}</span></div>
+        <div class="wage-row" style="align-items:center;">
+          <span class="wage-label">手動調整</span>
+          <span style="display:flex;align-items:center;gap:6px;">
+            <input type="number" value="${manualAdj}" style="width:80px;padding:3px 6px;border:0.5px solid #ddd;border-radius:5px;font-size:12px;" onchange="setManualAdj(${s.storeId},${s.id},${year},${month},this.value)" placeholder="0"/>
+            <span style="font-size:11px;color:#888;">円</span>
+          </span>
+        </div>
+        <div class="wage-row" style="border-top:1px solid #ddd;margin-top:4px;padding-top:4px;">
+          <span class="wage-label" style="font-weight:600;">概算合計</span>
+          <span class="wage-total">${fmtYen(grandTotal)}</span>
+        </div>
+      </div>`:'<div style="font-size:11px;color:#888;margin-top:6px;">※ 設定タブでスタッフの時給を登録すると賃金計算が表示されます</div>';
 
     return `<div class="staff-report-card">
       <div class="src-header">
-        <div><div class="src-name">${s.name}</div><div class="src-store">${s.storeName}</div></div>
+        <div><div class="src-name">${s.name}</div><div class="src-store">${s.storeName}　${year}年${month}月</div></div>
         <div class="src-summary">
           <div class="src-sum-item"><div class="src-sum-label">出勤日数</div><div class="src-sum-val">${totalDays}日</div></div>
           <div class="src-sum-item"><div class="src-sum-label">総勤務</div><div class="src-sum-val">${fmt(totalMin)}</div></div>
           <div class="src-sum-item"><div class="src-sum-label">残業</div><div class="src-sum-val">${fmt(totalOTMin)}</div></div>
+          ${hourlyWage?`<div class="src-sum-item"><div class="src-sum-label">概算給与</div><div class="src-sum-val" style="color:#3C3489;">¥${Math.round(grandTotal).toLocaleString()}</div></div>`:''}
           <div class="src-sum-item"><div class="src-sum-label">36協定</div><div class="src-sum-val">${otAlert}</div></div>
           <button class="dl-btn" onclick="exportCSV(${s.storeId},${s.id},'${s.name}','${s.storeName}',${year},${month})">📥 CSV</button>
         </div>
       </div>
       <div style="padding:10px 14px;background:#f9f9f9;border-bottom:1px solid #eee;">
-        <div style="font-size:12px;color:#888;margin-bottom:4px;">36協定　今月の残業：${fmt(totalOTMin)} / 上限${fmt(monthLimit)}（${mPct}%）</div>
+        <div style="font-size:11px;color:#888;margin-bottom:4px;">36協定　今月の残業：${fmt(totalOTMin)} / 上限${fmt(monthLimit)}（${mPct}%）</div>
         <div class="ot-bar-wrap"><div class="ot-bar" style="width:${mPct}%;background:${barColor};"></div></div>
         ${wageHtml}
       </div>
-      <table class="src-tbl">
-        <thead><tr><th>日付</th><th>出勤</th><th>退勤</th><th>勤務時間</th><th>残業・割増</th><th>休憩</th><th>メモ</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
+      <div style="overflow-x:auto;">
+        <table class="src-tbl">
+          <thead><tr><th>日付</th><th>出勤</th><th>退勤</th><th>勤務時間</th><th>残業・割増</th><th>休憩</th><th>メモ</th><th></th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      <div style="display:flex;gap:8px;padding:10px 14px;justify-content:flex-end;">
+        <button class="dl-btn" onclick="exportCSV(${s.storeId},${s.id},'${s.name}','${s.storeName}',${year},${month})"><i class="ti ti-download" style="font-size:13px;"></i> CSV出力</button>
+        <button class="dl-btn" style="background:#D4537E;border-color:#D4537E;color:#fff;" onclick="printReport(${s.storeId},${s.id},'${s.name}','${s.storeName}',${year},${month})"><i class="ti ti-printer" style="font-size:13px;"></i> 印刷</button>
+      </div>
     </div>`;
   }).join('');
 }
 
 window.exportCSV=function(storeId,staffId,staffName,storeName,year,month){
   const days=getMonthDays(year,month);
-  const csvRows=[['日付','曜日','出勤','退勤','勤務時間(分)','残業(分)','深夜(分)','休日出勤(分)','休憩取得','メモ']];
+  const staffData=(cfg.staff[storeId]||[]).find(x=>x.id===staffId);
+  const hourlyWage=staffData?.hourlyWage||0;
+  const rate=hourlyWage/60;
+  const manualAdj=manualAdjustments[`${storeId}_${staffId}_${year}_${month}`]||0;
+  const header=['日付','曜日','出勤','退勤','勤務(分)','残業(分)','深夜(分)','休日出勤(分)','休憩取得',
+    '通常給与','残業割増','深夜割増','休日割増','日計','メモ'];
+  const csvRows=[header];
+  let sumNormal=0,sumOT=0,sumNight=0,sumHol=0,sumTotal=0;
   days.forEach(d=>{
     const dateStr=d.toLocaleDateString('ja-JP'),wd=WDAYS[d.getDay()];
     const w=calcWork(storeId,staffId,dateStr);
     const hasBrk=breaks[`${storeId}_${staffId}_${dateStr}`];
+    const memos=records.filter(r=>r.storeId===storeId&&r.staffId===staffId&&r.type==='memo'&&new Date(r.time).toLocaleDateString('ja-JP')===dateStr);
+    const otMin=calcOvertimeMin(w.workMin);
+    const sp=w.inTime&&w.outTime?calcSpecialHours(w.inTime,w.outTime):{nightMin:0,holidayMin:0,normalMin:0};
+    const normalWage=hourlyWage?(sp.normalMin+sp.nightMin+sp.holidayMin)*rate:null;
+    const otExtra=hourlyWage?otMin*rate*0.25:null;
+    const nightExtra=hourlyWage?sp.nightMin*rate*NIGHT_RATE:null;
+    const holExtra=hourlyWage?sp.holidayMin*rate*HOLIDAY_RATE:null;
+    const dayTotal=hourlyWage?(normalWage+otExtra+nightExtra+holExtra):null;
+    if(hourlyWage){sumNormal+=normalWage;sumOT+=otExtra;sumNight+=nightExtra;sumHol+=holExtra;sumTotal+=dayTotal;}
+    csvRows.push([
+      dateStr,wd,
+      w.inTime?fmtT(w.inTime):'',w.outTime?fmtT(w.outTime):'',
+      w.workMin?Math.round(w.workMin):'',otMin?Math.round(otMin):'',
+      sp.nightMin?Math.round(sp.nightMin):'',sp.holidayMin?Math.round(sp.holidayMin):'',
+      hasBrk?'取得済み':'',
+      hourlyWage?Math.round(normalWage):'',hourlyWage?Math.round(otExtra):'',
+      hourlyWage?Math.round(nightExtra):'',hourlyWage?Math.round(holExtra):'',
+      hourlyWage?Math.round(dayTotal):'',
+      memos.map(m=>m.memo.replace(/,/g,'、')).join(' / ')
+    ]);
+  });
+  if(hourlyWage){
+    csvRows.push(['月合計','','','','','','','','',
+      Math.round(sumNormal),Math.round(sumOT),Math.round(sumNight),Math.round(sumHol),
+      Math.round(sumTotal+manualAdj),'']);
+  }
+  dlCSV(csvRows,`${year}年${month}月_${storeName}_${staffName}.csv`);
+  showToast(`${staffName}の${year}年${month}月データをダウンロードしました`);
+}_${staffId}_${dateStr}`];
     const memos=records.filter(r=>r.storeId===storeId&&r.staffId===staffId&&r.type==='memo'&&new Date(r.time).toLocaleDateString('ja-JP')===dateStr);
     const otMin=calcOvertimeMin(w.workMin);
     const sp=w.inTime&&w.outTime?calcSpecialHours(w.inTime,w.outTime):{nightMin:0,holidayMin:0};
@@ -1131,6 +1244,123 @@ window.saveStaffEdit=async function(){
 document.getElementById('staff-modal').addEventListener('click',function(e){
   if(e.target===this)closeStaffModal();
 });
+
+window.setManualAdj=function(storeId,staffId,year,month,val){
+  const key=`${storeId}_${staffId}_${year}_${month}`;
+  manualAdjustments[key]=parseInt(val)||0;
+  renderMonthlyReport();
+}
+
+window.openPunchModal=async function(storeId,staffId,dateStr){
+  const mine=records.filter(r=>r.storeId===storeId&&r.staffId===staffId&&new Date(r.time).toLocaleDateString('ja-JP')===dateStr);
+  const inR=mine.find(r=>r.type==='in'),outR=mine.find(r=>r.type==='out');
+  document.getElementById('pm-store-id').value=storeId;
+  document.getElementById('pm-staff-id').value=staffId;
+  document.getElementById('pm-date').value=dateStr;
+  document.getElementById('punch-modal-date').textContent=`${dateStr} の打刻修正`;
+  document.getElementById('pm-in').value=inR?new Date(inR.time).toTimeString().slice(0,5):'';
+  document.getElementById('pm-out').value=outR?new Date(outR.time).toTimeString().slice(0,5):'';
+  document.getElementById('pm-reason').value='';
+  document.getElementById('punch-modal').style.display='flex';
+}
+window.closePunchModal=function(){
+  document.getElementById('punch-modal').style.display='none';
+}
+window.savePunchEdit=async function(){
+  const storeId=parseInt(document.getElementById('pm-store-id').value);
+  const staffId=parseInt(document.getElementById('pm-staff-id').value);
+  const dateStr=document.getElementById('pm-date').value;
+  const inTime=document.getElementById('pm-in').value;
+  const outTime=document.getElementById('pm-out').value;
+  const reason=document.getElementById('pm-reason').value.trim();
+  const store=cfg.stores.find(s=>s.id===storeId);
+  const staff=(cfg.staff[storeId]||[]).find(s=>s.id===staffId);
+  if(!store||!staff)return;
+  const dateParts=dateStr.split('/');
+  const baseDate=new Date(dateParts[0],dateParts[1]-1,dateParts[2]);
+  const toISO=(timeStr)=>{
+    if(!timeStr)return null;
+    const [h,m]=timeStr.split(':');
+    const d=new Date(baseDate);d.setHours(parseInt(h),parseInt(m),0,0);
+    return d.toISOString();
+  };
+  const oldIn=records.find(r=>r.storeId===storeId&&r.staffId===staffId&&r.type==='in'&&new Date(r.time).toLocaleDateString('ja-JP')===dateStr);
+  const oldOut=records.find(r=>r.storeId===storeId&&r.staffId===staffId&&r.type==='out'&&new Date(r.time).toLocaleDateString('ja-JP')===dateStr);
+  if(oldIn&&oldIn.id){await deleteDoc(doc(db,'records',oldIn.id));records=records.filter(r=>r.id!==oldIn.id);}
+  if(oldOut&&oldOut.id){await deleteDoc(doc(db,'records',oldOut.id));records=records.filter(r=>r.id!==oldOut.id);}
+  if(inTime){
+    const rec={storeId,storeName:store.name,staffId,staffName:staff.name,type:'in',time:toISO(inTime),corrected:true,reason};
+    await addRecord(rec);
+    statuses[`${storeId}_${staffId}`]='in';
+  }
+  if(outTime){
+    const rec={storeId,storeName:store.name,staffId,staffName:staff.name,type:'out',time:toISO(outTime),corrected:true,reason};
+    await addRecord(rec);
+    statuses[`${storeId}_${staffId}`]='out';
+  }
+  await saveStatuses();
+  closePunchModal();
+  showToast(`${dateStr}の打刻を修正しました`);
+  renderMonthlyReport();
+}
+document.getElementById('punch-modal').addEventListener('click',function(e){
+  if(e.target===this)closePunchModal();
+});
+
+window.printReport=function(storeId,staffId,staffName,storeName,year,month){
+  const staffData=(cfg.staff[storeId]||[]).find(x=>x.id===staffId);
+  const hourlyWage=staffData?.hourlyWage||0;
+  const rate=hourlyWage/60;
+  const manualAdj=manualAdjustments[`${storeId}_${staffId}_${year}_${month}`]||0;
+  const days=getMonthDays(year,month);
+  let rows='',totalDays=0,totalMin=0,totalOTMin=0,totalNormalWage=0,totalOTExtra=0,totalNightExtra=0,totalHolExtra=0;
+  days.forEach(d=>{
+    const dateStr=d.toLocaleDateString('ja-JP'),wd=WDAYS[d.getDay()];
+    const w=calcWork(storeId,staffId,dateStr);
+    const hasBrk=breaks[`${storeId}_${staffId}_${dateStr}`];
+    const otMin=calcOvertimeMin(w.workMin);
+    const sp=w.inTime&&w.outTime?calcSpecialHours(w.inTime,w.outTime):{nightMin:0,holidayMin:0,normalMin:0};
+    const isHoliday=d.getDay()===0;
+    if(w.inTime){totalDays++;if(w.workMin)totalMin+=w.workMin;totalOTMin+=otMin;}
+    if(hourlyWage&&w.inTime){
+      totalNormalWage+=(sp.normalMin+sp.nightMin+sp.holidayMin)*rate;
+      totalOTExtra+=otMin*rate*0.25;
+      totalNightExtra+=sp.nightMin*rate*NIGHT_RATE;
+      totalHolExtra+=sp.holidayMin*rate*HOLIDAY_RATE;
+    }
+    const wdColor=d.getDay()===0?'#E05050':d.getDay()===6?'#2B7BD4':'#333';
+    const tags=(otMin>0?'残業':'')+(sp.nightMin>0?' 深夜':'')+(isHoliday&&w.inTime?' 休日':'');
+    rows+=`<tr><td style="color:${wdColor}">${d.getDate()}日(${wd})</td><td>${w.inTime?fmtT(w.inTime):'—'}</td><td>${w.outTime?fmtT(w.outTime):'—'}</td><td>${fmt(w.workMin)}</td><td style="font-size:11px;">${tags}</td><td>${hasBrk?'✓':'—'}</td></tr>`;
+  });
+  const grandTotal=totalNormalWage+totalOTExtra+totalNightExtra+totalHolExtra+manualAdj;
+  const wageRows=hourlyWage?`
+    <tr><td>通常給与</td><td style="text-align:right;">¥${Math.round(totalNormalWage).toLocaleString()}</td></tr>
+    <tr><td>残業割増（25%）</td><td style="text-align:right;">+ ¥${Math.round(totalOTExtra).toLocaleString()}</td></tr>
+    <tr><td>深夜割増（25%）</td><td style="text-align:right;">+ ¥${Math.round(totalNightExtra).toLocaleString()}</td></tr>
+    <tr><td>休日割増（35%）</td><td style="text-align:right;">+ ¥${Math.round(totalHolExtra).toLocaleString()}</td></tr>
+    <tr><td>手動調整</td><td style="text-align:right;">+ ¥${manualAdj.toLocaleString()}</td></tr>
+    <tr style="font-weight:bold;border-top:2px solid #333;"><td>概算合計</td><td style="text-align:right;color:#5B3F9E;">¥${Math.round(grandTotal).toLocaleString()}</td></tr>`:'';
+  const html=`<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>${year}年${month}月 ${staffName} 勤怠レポート</title>
+  <style>body{font-family:sans-serif;font-size:12px;padding:20px;color:#333;}h2{font-size:16px;margin-bottom:4px;}h3{font-size:13px;margin:16px 0 6px;color:#555;}
+  table{width:100%;border-collapse:collapse;margin-bottom:12px;}th,td{padding:5px 8px;border:1px solid #ccc;text-align:left;}th{background:#f5f5f5;}
+  .summary{display:flex;gap:20px;margin:10px 0 16px;}.sum-item{text-align:center;}.sum-label{font-size:10px;color:#888;}.sum-val{font-size:15px;font-weight:bold;}
+  .wage-table{width:50%;margin-left:auto;}.total-row{font-weight:bold;background:#F0EAFD;}
+  @media print{body{padding:10px;}}</style></head><body>
+  <h2>勤怠レポート　${year}年${month}月</h2>
+  <p>${storeName}　${staffName}　${hourlyWage?`時給 ¥${hourlyWage.toLocaleString()}`:'（時給未設定）'}</p>
+  <div class="summary">
+    <div class="sum-item"><div class="sum-label">出勤日数</div><div class="sum-val">${totalDays}日</div></div>
+    <div class="sum-item"><div class="sum-label">総勤務時間</div><div class="sum-val">${fmt(totalMin)}</div></div>
+    <div class="sum-item"><div class="sum-label">残業時間</div><div class="sum-val">${fmt(totalOTMin)}</div></div>
+    ${hourlyWage?`<div class="sum-item"><div class="sum-label">概算給与</div><div class="sum-val" style="color:#5B3F9E;">¥${Math.round(grandTotal).toLocaleString()}</div></div>`:''}
+  </div>
+  <h3>日次勤怠</h3>
+  <table><thead><tr><th>日付</th><th>出勤</th><th>退勤</th><th>勤務時間</th><th>備考</th><th>休憩</th></tr></thead><tbody>${rows}</tbody></table>
+  ${hourlyWage?`<h3>賃金内訳</h3><table class="wage-table"><tbody>${wageRows}</tbody></table>`:''}
+  <p style="margin-top:20px;font-size:10px;color:#888;">※ この帳票は概算です。実際の給与計算は別途ご確認ください。出力日時：${new Date().toLocaleString('ja-JP')}</p>
+  <script>window.print();<\/script></body></html>`;
+  const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();}
+}
 window.changeStaffPass=async function(){const p=document.getElementById('new-staff-pass').value;if(p.length<4){showToast('パスワードは4文字以上');return;}cfg.staffPass=p;await saveCfg();document.getElementById('new-staff-pass').value='';showToast('スタッフパスワードを変更しました');}
 window.save36Settings=async function(){
   const ml=parseInt(document.getElementById('ot-monthly-limit').value)||OT_MONTHLY_DEFAULT;
