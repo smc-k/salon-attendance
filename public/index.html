@@ -183,6 +183,21 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .ot-bar-ok{background:#639922;}
 .ot-bar-warn{background:#EF9F27;}
 .ot-bar-danger{background:#E05050;}
+
+/* スタッフ編集モーダル */
+.modal-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.4);z-index:200;display:flex;align-items:center;justify-content:center;}
+.modal-card{background:#fff;border-radius:12px;padding:1.5rem;width:420px;max-width:90vw;box-shadow:0 8px 32px rgba(0,0,0,0.15);}
+.modal-title{font-size:16px;font-weight:500;margin-bottom:1rem;color:#222;}
+.modal-field{margin-bottom:12px;}
+.modal-field label{display:block;font-size:12px;color:#666;margin-bottom:4px;}
+.modal-field input,.modal-field textarea{width:100%;padding:8px 10px;border-radius:8px;border:1px solid #ddd;font-size:13px;background:#fff;font-family:inherit;}
+.modal-field textarea{resize:none;height:100px;line-height:1.5;}
+.modal-field input:focus,.modal-field textarea:focus{outline:none;border-color:#D4537E;}
+.modal-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:1rem;}
+.modal-btn-cancel{padding:8px 16px;border-radius:8px;border:1px solid #ddd;background:transparent;font-size:13px;color:#666;cursor:pointer;}
+.modal-btn-save{padding:8px 16px;border-radius:8px;border:none;background:#D4537E;color:#fff;font-size:13px;font-weight:500;cursor:pointer;}
+.modal-btn-save:hover{background:#993556;}
+
 .toast{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:#fff;border:1px solid #ddd;border-radius:8px;padding:10px 20px;font-size:13px;opacity:0;transition:opacity 0.2s;pointer-events:none;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,0.1);}
 .toast.show{opacity:1;}
 .empty{text-align:center;color:#888;font-size:13px;padding:24px;}
@@ -352,7 +367,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
               <input type="number" id="new-staff-wage" placeholder="時給(円)" min="0" style="max-width:100px;"/>
               <button class="add-btn" onclick="addStaff()">追加</button>
             </div>
-            <table class="tbl"><thead><tr><th>店舗</th><th>スタッフ名</th><th>時給</th><th>状態</th><th></th></tr></thead><tbody id="staff-list"></tbody></table>
+            <table class="tbl"><thead><tr><th>店舗</th><th>スタッフ名</th><th>時給</th><th>管理メモ</th><th>状態</th><th></th></tr></thead><tbody id="staff-list"></tbody></table>
           </div>
         </div>
         <div class="card" style="margin-top:1rem;">
@@ -384,6 +399,36 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
   </div>
 </div>
+
+<!-- スタッフ編集モーダル -->
+<div class="modal-overlay" id="staff-modal" style="display:none;">
+  <div class="modal-card">
+    <div class="modal-title">スタッフ情報の編集</div>
+    <input type="hidden" id="edit-store-id"/>
+    <input type="hidden" id="edit-staff-id"/>
+    <div class="modal-field">
+      <label>店舗</label>
+      <input type="text" id="edit-store-name" readonly style="background:#f5f5f5;color:#888;"/>
+    </div>
+    <div class="modal-field">
+      <label>スタッフ名</label>
+      <input type="text" id="edit-staff-name" placeholder="スタッフ名を入力"/>
+    </div>
+    <div class="modal-field">
+      <label>時給（円）</label>
+      <input type="number" id="edit-staff-wage" placeholder="例：1200" min="0"/>
+    </div>
+    <div class="modal-field">
+      <label>管理メモ（スタッフには表示されません）</label>
+      <textarea id="edit-staff-memo" placeholder="特記事項・注意事項・雇用形態など自由に入力"></textarea>
+    </div>
+    <div class="modal-btns">
+      <button class="modal-btn-cancel" onclick="closeStaffModal()">キャンセル</button>
+      <button class="modal-btn-save" onclick="saveStaffEdit()">保存</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script type="module">
@@ -1025,8 +1070,9 @@ function renderSettings(){
   document.getElementById('new-staff-store').innerHTML='<option value="">店舗を選択</option>'+cfg.stores.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
   document.getElementById('staff-list').innerHTML=cfg.stores.flatMap(store=>(cfg.staff[store.id]||[]).map(s=>{
     const st=getSt(`${store.id}_${s.id}`);
-    const wage=s.hourlyWage?`¥${s.hourlyWage}/h`:'未設定';
-    return `<tr><td>${store.name}</td><td>${s.name}</td><td style="color:${s.hourlyWage?'#333':'#aaa'}">${wage}</td><td>${st==='in'?'<span class="badge b-in">出勤中</span>':'<span style="color:#888;font-size:11px;">退勤</span>'}</td><td><button class="del-btn" onclick="delStaff(${store.id},${s.id})">削除</button></td></tr>`;
+    const wage=s.hourlyWage?`¥${s.hourlyWage}/h`:'<span style="color:#aaa;">未設定</span>';
+    const memo=s.adminMemo?`<span style="font-size:11px;color:#5B3F9E;" title="${s.adminMemo}">📝 ${s.adminMemo.length>10?s.adminMemo.slice(0,10)+'…':s.adminMemo}</span>`:'<span style="color:#ccc;font-size:11px;">—</span>';
+    return `<tr><td>${store.name}</td><td>${s.name}</td><td>${wage}</td><td>${memo}</td><td>${st==='in'?'<span class="badge b-in">出勤中</span>':'<span style="color:#888;font-size:11px;">退勤</span>'}</td><td style="display:flex;gap:4px;"><button class="add-btn" style="padding:4px 10px;font-size:11px;" onclick="openStaffModal(${store.id},${s.id})">編集</button><button class="del-btn" onclick="delStaff(${store.id},${s.id})">削除</button></td></tr>`;
   })).join('');
   document.getElementById('ot-monthly-limit').value=cfg.otMonthlyLimit||OT_MONTHLY_DEFAULT;
   document.getElementById('ot-yearly-limit').value=cfg.otYearlyLimit||OT_YEARLY_DEFAULT;
@@ -1050,6 +1096,41 @@ window.addStaff=async function(){
 }
 window.delStaff=async function(storeId,staffId){cfg.staff[storeId]=(cfg.staff[storeId]||[]).filter(s=>s.id!==staffId);await saveCfg();showToast('スタッフを削除しました');renderSettings();}
 window.changeAdminPass=async function(){const p=document.getElementById('new-admin-pass').value;if(p.length<6){showToast('パスワードは6文字以上');return;}cfg.adminPass=p;await saveCfg();document.getElementById('new-admin-pass').value='';showToast('管理者パスワードを変更しました');}
+
+window.openStaffModal=function(storeId,staffId){
+  const store=cfg.stores.find(s=>s.id===storeId);
+  const staff=(cfg.staff[storeId]||[]).find(s=>s.id===staffId);
+  if(!store||!staff)return;
+  document.getElementById('edit-store-id').value=storeId;
+  document.getElementById('edit-staff-id').value=staffId;
+  document.getElementById('edit-store-name').value=store.name;
+  document.getElementById('edit-staff-name').value=staff.name;
+  document.getElementById('edit-staff-wage').value=staff.hourlyWage||'';
+  document.getElementById('edit-staff-memo').value=staff.adminMemo||'';
+  document.getElementById('staff-modal').style.display='flex';
+}
+window.closeStaffModal=function(){
+  document.getElementById('staff-modal').style.display='none';
+}
+window.saveStaffEdit=async function(){
+  const storeId=parseInt(document.getElementById('edit-store-id').value);
+  const staffId=parseInt(document.getElementById('edit-staff-id').value);
+  const name=document.getElementById('edit-staff-name').value.trim();
+  const wage=parseInt(document.getElementById('edit-staff-wage').value)||0;
+  const memo=document.getElementById('edit-staff-memo').value.trim();
+  if(!name){showToast('スタッフ名を入力してください');return;}
+  const idx=(cfg.staff[storeId]||[]).findIndex(s=>s.id===staffId);
+  if(idx===-1)return;
+  cfg.staff[storeId][idx]={...cfg.staff[storeId][idx],name,hourlyWage:wage,adminMemo:memo};
+  await saveCfg();
+  closeStaffModal();
+  showToast('スタッフ情報を更新しました');
+  renderSettings();
+}
+// モーダル外クリックで閉じる
+document.getElementById('staff-modal').addEventListener('click',function(e){
+  if(e.target===this)closeStaffModal();
+});
 window.changeStaffPass=async function(){const p=document.getElementById('new-staff-pass').value;if(p.length<4){showToast('パスワードは4文字以上');return;}cfg.staffPass=p;await saveCfg();document.getElementById('new-staff-pass').value='';showToast('スタッフパスワードを変更しました');}
 window.save36Settings=async function(){
   const ml=parseInt(document.getElementById('ot-monthly-limit').value)||OT_MONTHLY_DEFAULT;
