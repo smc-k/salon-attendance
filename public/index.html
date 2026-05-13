@@ -1086,14 +1086,6 @@ window.exportCSV=function(storeId,staffId,staffName,storeName,year,month){
   }
   dlCSV(csvRows,`${year}年${month}月_${storeName}_${staffName}.csv`);
   showToast(`${staffName}の${year}年${month}月データをダウンロードしました`);
-}_${staffId}_${dateStr}`];
-    const memos=records.filter(r=>r.storeId===storeId&&r.staffId===staffId&&r.type==='memo'&&new Date(r.time).toLocaleDateString('ja-JP')===dateStr);
-    const otMin=calcOvertimeMin(w.workMin);
-    const sp=w.inTime&&w.outTime?calcSpecialHours(w.inTime,w.outTime):{nightMin:0,holidayMin:0};
-    csvRows.push([dateStr,wd,w.inTime?fmtT(w.inTime):'',w.outTime?fmtT(w.outTime):'',w.workMin?Math.round(w.workMin):'',otMin?Math.round(otMin):'',sp.nightMin?Math.round(sp.nightMin):'',sp.holidayMin?Math.round(sp.holidayMin):'',hasBrk?'取得済み':'',memos.map(m=>m.memo.replace(/,/g,'、')).join(' / ')]);
-  });
-  dlCSV(csvRows,`${year}年${month}月_${storeName}_${staffName}.csv`);
-  showToast(`${staffName}の${year}年${month}月データをダウンロードしました`);
 }
 
 window.exportAllCSV=function(){
