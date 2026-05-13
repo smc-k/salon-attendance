@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>カラーサロン 勤怠管理</title>
+<title>勤怠管理</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f5f5;color:#333;}
@@ -132,13 +132,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .src-header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#f9f9f9;border-bottom:1px solid #eee;flex-wrap:wrap;gap:10px;}
 .src-name{font-size:14px;font-weight:500;}
 .src-store{font-size:12px;color:#888;}
-.src-summary{display:flex;gap:16px;align-items:center;}
+.src-summary{display:flex;gap:12px;align-items:center;flex-wrap:wrap;}
 .src-sum-item{text-align:center;}
 .src-sum-label{font-size:10px;color:#888;}
 .src-sum-val{font-size:13px;font-weight:500;}
 .src-tbl{width:100%;border-collapse:collapse;font-size:12px;}
-.src-tbl th{padding:7px 12px;text-align:left;color:#888;font-weight:400;border-bottom:1px solid #eee;background:#f9f9f9;white-space:nowrap;}
-.src-tbl td{padding:8px 12px;border-bottom:1px solid #eee;}
+.src-tbl th{padding:7px 10px;text-align:left;color:#888;font-weight:400;border-bottom:1px solid #eee;background:#f9f9f9;white-space:nowrap;}
+.src-tbl td{padding:7px 10px;border-bottom:1px solid #eee;}
 .src-tbl tr:last-child td{border-bottom:none;}
 .dl-btn{display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:8px;border:1px solid #ddd;background:#fff;font-size:12px;cursor:pointer;}
 .dl-btn:hover{background:#FBEAF0;border-color:#ED93B1;color:#993556;}
@@ -160,7 +160,29 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .del-btn:hover{background:#FAECE7;border-color:#F0997B;color:#993C1D;}
 .section-label{font-size:13px;font-weight:500;margin-bottom:10px;}
 .pw-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
-.pw-row input{padding:7px 10px;border-radius:8px;border:1px solid #ddd;font-size:13px;background:#fff;width:220px;}
+.pw-row input{padding:7px 10px;border-radius:8px;border:1px solid #ddd;font-size:13px;background:#fff;width:200px;}
+/* 36協定アラート */
+.alert-box{border-radius:8px;padding:10px 14px;margin-bottom:8px;display:flex;align-items:flex-start;gap:10px;font-size:12px;line-height:1.6;}
+.alert-warn{background:#FFF8EE;border:1px solid #EF9F27;color:#854F0B;}
+.alert-danger{background:#FEF0F0;border:1px solid #E05050;color:#8B1A1A;}
+.alert-ok{background:#EAF3DE;border:1px solid #97C459;color:#3B6D11;}
+.alert-icon{font-size:16px;flex-shrink:0;margin-top:1px;}
+.alert-body{flex:1;}
+.alert-title{font-weight:600;margin-bottom:2px;}
+/* 割増賃金テーブル */
+.wage-section{background:#F7F3FD;border:1px solid #D5C5F5;border-radius:8px;padding:10px 12px;margin-top:6px;}
+.wage-title{font-size:11px;font-weight:600;color:#5B3F9E;margin-bottom:6px;}
+.wage-row{display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:1px solid #E8DEF8;}
+.wage-row:last-child{border-bottom:none;font-weight:600;}
+.wage-label{color:#666;}
+.wage-val{color:#333;font-weight:500;}
+.wage-total{color:#5B3F9E;font-weight:700;}
+/* 残業バー */
+.ot-bar-wrap{margin:4px 0;background:#eee;border-radius:4px;height:8px;overflow:hidden;}
+.ot-bar{height:100%;border-radius:4px;transition:width 0.4s;}
+.ot-bar-ok{background:#639922;}
+.ot-bar-warn{background:#EF9F27;}
+.ot-bar-danger{background:#E05050;}
 .toast{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:#fff;border:1px solid #ddd;border-radius:8px;padding:10px 20px;font-size:13px;opacity:0;transition:opacity 0.2s;pointer-events:none;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,0.1);}
 .toast.show{opacity:1;}
 .empty{text-align:center;color:#888;font-size:13px;padding:24px;}
@@ -170,7 +192,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 <div id="loading-screen" class="loading-screen">読み込み中...</div>
 <div class="app" id="main-app" style="display:none;">
   <div class="hdr" id="hdr" style="display:none;">
-    <div class="logo"><span class="logo-dot"></span> カラーサロン 勤怠管理</div>
+    <div class="logo"><span class="logo-dot"></span> 勤怠管理</div>
     <div class="ubadge">
       <span id="hdr-name"></span><span class="rpill" id="hdr-role"></span>
       <button class="logout-btn" onclick="logout()">ログアウト</button>
@@ -217,7 +239,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
           <div class="store-staff-list" id="store-staff-list"></div>
         </div>
         <div class="punch-area">
-          <div><div class="clk-big" id="s-clk">--:--:--</div><div class="clk-date" id="s-dt"></div></div>
+          <div><div class="clk-big" id="s-clk">--:--</div><div class="clk-date" id="s-dt"></div></div>
           <div class="status-strip">
             <div class="ss-store-txt" id="ss-store"></div>
             <div class="ss-name-txt" id="ss-name"></div>
@@ -249,6 +271,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <!-- ADMIN VIEW -->
   <div id="v-admin" style="display:none;">
     <div class="admin-wrap">
+      <!-- 36協定アラートエリア -->
+      <div id="alert-area"></div>
       <div class="tabs">
         <button class="tab active" id="t-live"     onclick="atab('live')">リアルタイム</button>
         <button class="tab"        id="t-monthly"  onclick="atab('monthly')">月次レポート</button>
@@ -257,10 +281,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <button class="tab"        id="t-log"      onclick="atab('log')">打刻ログ</button>
         <button class="tab"        id="t-settings" onclick="atab('settings')">設定</button>
       </div>
+
       <div id="a-live">
         <div class="kpi-row" id="a-kpi"></div>
         <div class="card" style="margin-top:1rem;"><div class="card-title">全店舗 出勤状況</div><div class="live-grid" id="a-lgrid"></div></div>
       </div>
+
       <div id="a-monthly" style="display:none;">
         <div class="card">
           <div style="display:flex;flex-direction:column;gap:12px;">
@@ -278,6 +304,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
           </div>
         </div>
       </div>
+
       <div id="a-summary" style="display:none;">
         <div class="card">
           <div class="frow">
@@ -288,6 +315,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
           <tbody id="a-sum-body"></tbody></table>
         </div>
       </div>
+
       <div id="a-memos" style="display:none;">
         <div class="card">
           <div class="frow">
@@ -297,6 +325,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
           <div id="memo-list"></div>
         </div>
       </div>
+
       <div id="a-log" style="display:none;">
         <div class="card">
           <div class="frow">
@@ -307,6 +336,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
           <tbody id="a-log-body"></tbody></table>
         </div>
       </div>
+
       <div id="a-settings" style="display:none;">
         <div class="settings-grid">
           <div class="card">
@@ -316,14 +346,39 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
           </div>
           <div class="card">
             <div class="section-label">スタッフの登録</div>
-            <div class="form-row"><select id="new-staff-store"><option value="">店舗を選択</option></select><input type="text" id="new-staff-name" placeholder="スタッフ名"/><button class="add-btn" onclick="addStaff()">追加</button></div>
-            <table class="tbl"><thead><tr><th>店舗</th><th>スタッフ名</th><th>状態</th><th></th></tr></thead><tbody id="staff-list"></tbody></table>
+            <div class="form-row">
+              <select id="new-staff-store"><option value="">店舗を選択</option></select>
+              <input type="text" id="new-staff-name" placeholder="スタッフ名"/>
+              <input type="number" id="new-staff-wage" placeholder="時給(円)" min="0" style="max-width:100px;"/>
+              <button class="add-btn" onclick="addStaff()">追加</button>
+            </div>
+            <table class="tbl"><thead><tr><th>店舗</th><th>スタッフ名</th><th>時給</th><th>状態</th><th></th></tr></thead><tbody id="staff-list"></tbody></table>
           </div>
         </div>
         <div class="card" style="margin-top:1rem;">
           <div class="section-label">パスワードの変更</div>
           <div class="pw-row"><span style="font-size:12px;color:#888;width:130px;">管理者</span><input type="password" id="new-admin-pass" placeholder="新しいパスワード（6文字以上）"/><button class="add-btn" onclick="changeAdminPass()">変更</button></div>
           <div class="pw-row"><span style="font-size:12px;color:#888;width:130px;">スタッフ共通</span><input type="password" id="new-staff-pass" placeholder="新しいパスワード（4文字以上）"/><button class="add-btn" onclick="changeStaffPass()">変更</button></div>
+        </div>
+        <div class="card" style="margin-top:1rem;">
+          <div class="section-label">36協定の設定</div>
+          <div style="font-size:12px;color:#888;margin-bottom:12px;">法定の上限時間を変更する場合のみ修正してください。通常は変更不要です。</div>
+          <div class="pw-row">
+            <span style="font-size:12px;color:#888;width:160px;">月残業上限（時間）</span>
+            <input type="number" id="ot-monthly-limit" placeholder="45" min="1" style="width:80px;padding:7px 10px;border-radius:8px;border:1px solid #ddd;font-size:13px;"/>
+            <span style="font-size:12px;color:#888;">時間（原則45時間・特別条項最大80時間）</span>
+          </div>
+          <div class="pw-row">
+            <span style="font-size:12px;color:#888;width:160px;">年残業上限（時間）</span>
+            <input type="number" id="ot-yearly-limit" placeholder="360" min="1" style="width:80px;padding:7px 10px;border-radius:8px;border:1px solid #ddd;font-size:13px;"/>
+            <span style="font-size:12px;color:#888;">時間（原則360時間・特別条項最大720時間）</span>
+          </div>
+          <div class="pw-row">
+            <span style="font-size:12px;color:#888;width:160px;">所定労働時間（時間/日）</span>
+            <input type="number" id="reg-hours" placeholder="8" min="1" max="8" style="width:80px;padding:7px 10px;border-radius:8px;border:1px solid #ddd;font-size:13px;"/>
+            <span style="font-size:12px;color:#888;">時間（残業計算の基準。通常8時間）</span>
+          </div>
+          <button class="add-btn" onclick="save36Settings()">保存</button>
         </div>
       </div>
     </div>
@@ -351,7 +406,14 @@ const WDAYS=['日','月','火','水','木','金','土'];
 const AVB=['#F4C0D1','#B5D4F4','#C0DD97','#FAC775','#CECBF6','#9FE1CB','#F5C4B3'];
 const AVT=['#993556','#185FA5','#3B6D11','#854F0B','#3C3489','#0F6E56','#993C1D'];
 
-let cfg={stores:[],staff:{},adminPass:'admin123',staffPass:'staff123',nextStaffId:1,nextStoreId:1};
+// 深夜割増：22:00〜05:00（25%増）、休日（日曜）：35%増
+const NIGHT_START=22, NIGHT_END=5;
+const NIGHT_RATE=0.25, HOLIDAY_RATE=0.35;
+const OT_MONTHLY_DEFAULT=45, OT_YEARLY_DEFAULT=360;
+const REG_HOURS_DEFAULT=8;
+
+let cfg={stores:[],staff:{},adminPass:'admin123',staffPass:'staff123',nextStaffId:1,nextStoreId:1,
+  otMonthlyLimit:OT_MONTHLY_DEFAULT, otYearlyLimit:OT_YEARLY_DEFAULT, regHours:REG_HOURS_DEFAULT};
 let records=[],statuses={},breaks={};
 let cu=null,selRole=null,uiIv=null,selectedStaffIds=new Set();
 let loginStoreId=null,loginStaffId=null;
@@ -361,9 +423,11 @@ const fmtT=iso=>new Date(iso).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:
 const fmtDT=iso=>{const d=new Date(iso);return d.toLocaleDateString('ja-JP')+' '+d.toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});};
 const getSt=k=>statuses[k]||'out';
 const fmt=min=>{if(min===null||isNaN(min)||min<0)return'—';const h=Math.floor(min/60),m=Math.round(min%60);return h>0?`${h}h${m<10?'0':''}${m}m`:`${m}m`;};
+const fmtH=min=>{if(!min||min<0)return'0h00m';const h=Math.floor(min/60),m=Math.round(min%60);return `${h}h${m<10?'0':''}${m}m`;};
+const fmtYen=n=>n?`¥${Math.round(n).toLocaleString()}`:'-';
 const brkKey=()=>`${cu.storeId}_${cu.staffId}_${todayStr()}`;
 
-async function loadCfg(){const s=await getDoc(doc(db,'config','main'));if(s.exists())cfg=s.data();else await saveCfg();}
+async function loadCfg(){const s=await getDoc(doc(db,'config','main'));if(s.exists())cfg={...cfg,...s.data()};else await saveCfg();}
 async function saveCfg(){await setDoc(doc(db,'config','main'),cfg);}
 async function loadRecords(){const s=await getDocs(collection(db,'records'));records=[];s.forEach(d=>records.push({id:d.id,...d.data()}));records.sort((a,b)=>new Date(b.time)-new Date(a.time));}
 async function addRecord(rec){const r=await addDoc(collection(db,'records'),rec);records.unshift({id:r.id,...rec});}
@@ -378,6 +442,129 @@ function calcWork(storeId,staffId,dateStr){
   if(!inR)return{inTime:null,outTime:null,workMin:null};
   const endT=outR?new Date(outR.time):null;
   return{inTime:inR.time,outTime:outR?outR.time:null,workMin:endT?(endT-new Date(inR.time))/60000:null};
+}
+
+// ===== 深夜・休日時間計算 =====
+function calcSpecialHours(inIso, outIso) {
+  if(!inIso||!outIso) return {nightMin:0, holidayMin:0, normalMin:0};
+  const inT=new Date(inIso), outT=new Date(outIso);
+  let nightMin=0, holidayMin=0, normalMin=0;
+  let cur=new Date(inT);
+  while(cur<outT){
+    const next=new Date(Math.min(cur.getTime()+60000, outT.getTime()));
+    const h=cur.getHours();
+    const isNight=(h>=NIGHT_START||h<NIGHT_END);
+    const isHoliday=cur.getDay()===0; // 日曜
+    if(isHoliday) holidayMin++;
+    else if(isNight) nightMin++;
+    else normalMin++;
+    cur=next;
+  }
+  return{nightMin,holidayMin,normalMin};
+}
+
+// ===== 残業時間計算（所定を超えた分）=====
+function calcOvertimeMin(workMin){
+  if(!workMin) return 0;
+  const regMin=(cfg.regHours||REG_HOURS_DEFAULT)*60;
+  return Math.max(0, workMin-regMin);
+}
+
+// ===== 月次残業集計 =====
+function calcMonthlyOT(storeId, staffId, year, month){
+  const days=getMonthDays(year,month);
+  let totalOTMin=0;
+  days.forEach(d=>{
+    const dateStr=d.toLocaleDateString('ja-JP');
+    const w=calcWork(storeId,staffId,dateStr);
+    totalOTMin+=calcOvertimeMin(w.workMin);
+  });
+  return totalOTMin;
+}
+
+// ===== 年次残業集計 =====
+function calcYearlyOT(storeId, staffId, year){
+  let totalOTMin=0;
+  for(let m=1;m<=12;m++){
+    const days=getMonthDays(year,m);
+    days.forEach(d=>{
+      const dateStr=d.toLocaleDateString('ja-JP');
+      const w=calcWork(storeId,staffId,dateStr);
+      totalOTMin+=calcOvertimeMin(w.workMin);
+    });
+  }
+  return totalOTMin;
+}
+
+// ===== 賃金計算 =====
+function calcWage(storeId, staffId, year, month){
+  const store=cfg.stores.find(s=>s.id===storeId);
+  const staff=(cfg.staff[storeId]||[]).find(s=>s.id===staffId);
+  const hourlyWage=staff?.hourlyWage||0;
+  if(!hourlyWage) return null;
+  const days=getMonthDays(year,month);
+  let normalMin=0,nightMin=0,holidayMin=0,otMin=0;
+  days.forEach(d=>{
+    const dateStr=d.toLocaleDateString('ja-JP');
+    const w=calcWork(storeId,staffId,dateStr);
+    if(!w.inTime||!w.outTime) return;
+    const sp=calcSpecialHours(w.inTime,w.outTime);
+    normalMin+=sp.normalMin;nightMin+=sp.nightMin;holidayMin+=sp.holidayMin;
+    otMin+=calcOvertimeMin(w.workMin);
+  });
+  const rate=hourlyWage/60;
+  const normalWage=normalMin*rate;
+  const nightExtra=nightMin*rate*NIGHT_RATE;
+  const holidayExtra=holidayMin*rate*HOLIDAY_RATE;
+  const otExtra=otMin*rate*0.25; // 残業25%割増
+  return{normalMin,nightMin,holidayMin,otMin,normalWage,nightExtra,holidayExtra,otExtra,
+    total:normalWage+normalMin*rate*0+nightMin*rate+holidayMin*rate+nightExtra+holidayExtra+otExtra,
+    hourlyWage};
+}
+
+// ===== 36協定アラート =====
+function render36Alerts(){
+  const area=document.getElementById('alert-area');
+  if(!area)return;
+  const now=new Date();
+  const year=now.getFullYear();
+  const month=now.getMonth()+1;
+  const monthLimit=(cfg.otMonthlyLimit||OT_MONTHLY_DEFAULT)*60;
+  const yearLimit=(cfg.otYearlyLimit||OT_YEARLY_DEFAULT)*60;
+  let alerts=[];
+  cfg.stores.forEach(store=>{
+    (cfg.staff[store.id]||[]).forEach(staff=>{
+      const mOT=calcMonthlyOT(store.id,staff.id,year,month);
+      const yOT=calcYearlyOT(store.id,staff.id,year);
+      const mPct=Math.round(mOT/monthLimit*100);
+      const yPct=Math.round(yOT/yearLimit*100);
+      if(mPct>=80){
+        alerts.push({type:mPct>=100?'danger':'warn',
+          title:`${store.name}　${staff.name}`,
+          msg:`今月の残業：${fmtH(mOT)} / 上限${fmtH(monthLimit)}（${mPct}%）${mPct>=100?'　⚠️ 上限超過！':''}`,
+          pct:Math.min(mPct,100),level:'月次'});
+      }
+      if(yPct>=80){
+        alerts.push({type:yPct>=100?'danger':'warn',
+          title:`${store.name}　${staff.name}`,
+          msg:`今年の残業：${fmtH(yOT)} / 上限${fmtH(yearLimit)}（${yPct}%）${yPct>=100?'　⚠️ 上限超過！':''}`,
+          pct:Math.min(yPct,100),level:'年次'});
+      }
+    });
+  });
+  if(!alerts.length){
+    area.innerHTML=`<div class="alert-box alert-ok"><span class="alert-icon">✅</span><div class="alert-body"><div class="alert-title">36協定：問題なし</div><div>全スタッフの残業時間が上限80%未満です。</div></div></div>`;
+    return;
+  }
+  area.innerHTML=alerts.map(a=>`
+    <div class="alert-box alert-${a.type}">
+      <span class="alert-icon">${a.type==='danger'?'🚨':'⚠️'}</span>
+      <div class="alert-body">
+        <div class="alert-title">[36協定 ${a.level}アラート] ${a.title}</div>
+        <div>${a.msg}</div>
+        <div class="ot-bar-wrap"><div class="ot-bar ot-bar-${a.type}" style="width:${a.pct}%"></div></div>
+      </div>
+    </div>`).join('');
 }
 
 // ===== LOGIN =====
@@ -397,9 +584,7 @@ window.doAdminLogin=function(){
   const pass=document.getElementById('l-admin-pass').value;
   const err=document.getElementById('l-admin-err');
   if(pass!==cfg.adminPass){err.style.display='block';return;}
-  err.style.display='none';
-  cu={role:'admin'};
-  finishLogin();showAdmin();
+  err.style.display='none';cu={role:'admin'};finishLogin();showAdmin();
 }
 
 window.verifyStaffPass=function(){
@@ -447,8 +632,7 @@ window.doStaffLogin=function(){
   const staff=(cfg.staff[loginStoreId]||[]).find(x=>x.id===loginStaffId);
   if(!store||!staff)return;
   cu={role:'staff',storeId:loginStoreId,storeName:store.name,staffId:loginStaffId,staffName:staff.name};
-  err.style.display='none';
-  finishLogin();showStaff();
+  err.style.display='none';finishLogin();showStaff();
 }
 
 function finishLogin(){
@@ -525,9 +709,8 @@ function updateStaffUI(){
 
 window.toggleBreak=async function(){
   if(!cu)return;
-  const key=`${cu.storeId}_${cu.staffId}`,st=getSt(key);
   const today=todayStr(),mine=records.filter(r=>r.storeId===cu.storeId&&r.staffId===cu.staffId&&new Date(r.time).toLocaleDateString('ja-JP')===today);
-  const inR=mine.find(r=>r.type==='in'),outR=mine.find(r=>r.type==='out');
+  const inR=mine.find(r=>r.type==='in');
   if(!inR)return;
   const bk=brkKey();
   if(breaks[bk]){
@@ -548,8 +731,7 @@ window.submitMemo=async function(){
   if(!txt){showToast('メモを入力してください');return;}
   const now=new Date();
   await addRecord({storeId:cu.storeId,storeName:cu.storeName,staffId:cu.staffId,staffName:cu.staffName,type:'memo',time:now.toISOString(),memo:txt});
-  document.getElementById('memo-input').value='';
-  showToast('メモを送信しました');renderHist();
+  document.getElementById('memo-input').value='';showToast('メモを送信しました');renderHist();
 }
 
 function renderHist(){
@@ -584,6 +766,7 @@ function showAdmin(){
   const msel=document.getElementById('m-month');
   msel.innerHTML='';for(let m=1;m<=12;m++)msel.innerHTML+=`<option value="${m}"${m===now.getMonth()+1?' selected':''}>${m}月</option>`;
   document.getElementById('m-store').innerHTML='<option value="">全店舗</option>'+cfg.stores.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
+  render36Alerts();
   atab('live');
   clearInterval(uiIv);uiIv=setInterval(()=>{if(document.getElementById('a-live').style.display!=='none')renderLive();},15000);
 }
@@ -625,7 +808,13 @@ function renderLive(){
       const hasBrk=breaks[`${store.id}_${s.id}_${today}`];
       const hasMemo=records.some(r=>r.storeId===store.id&&r.staffId===s.id&&r.type==='memo'&&new Date(r.time).toLocaleDateString('ja-JP')===today);
       const ai=s.id%AVB.length;
-      return `<div class="lsrow"><div class="av" style="background:${AVB[ai]};color:${AVT[ai]}">${s.name.replace(/\s/g,'').slice(0,2)}</div><span class="lsname">${s.name}</span>${hasBrk?'<span title="休憩取得">☕</span>':''}${hasMemo?'<span title="メモあり">📝</span>':''}<div class="sdot ${st==='in'?'d-in':'d-out'}"></div></div>`;
+      // 残業アラートチェック
+      const now=new Date();
+      const mOT=calcMonthlyOT(store.id,s.id,now.getFullYear(),now.getMonth()+1);
+      const mLimit=(cfg.otMonthlyLimit||OT_MONTHLY_DEFAULT)*60;
+      const mPct=Math.round(mOT/mLimit*100);
+      const otBadge=mPct>=100?'<span style="font-size:10px;color:#E05050;" title="残業上限超過">🚨</span>':mPct>=80?'<span style="font-size:10px;color:#EF9F27;" title="残業注意">⚠️</span>':'';
+      return `<div class="lsrow"><div class="av" style="background:${AVB[ai]};color:${AVT[ai]}">${s.name.replace(/\s/g,'').slice(0,2)}</div><span class="lsname">${s.name}</span>${hasBrk?'<span title="休憩取得">☕</span>':''}${hasMemo?'<span title="メモあり">📝</span>':''}${otBadge}<div class="sdot ${st==='in'?'d-in':'d-out'}"></div></div>`;
     }).join('')}</div>`).join('');
 }
 
@@ -662,47 +851,88 @@ function renderMonthlyReport(){
   const sf=document.getElementById('m-store').value;
   const stores=sf?cfg.stores.filter(s=>s.id==sf):cfg.stores;
   const selStaff=stores.flatMap(store=>(cfg.staff[store.id]||[]).map(s=>({...s,storeId:store.id,storeName:store.name}))).filter(s=>selectedStaffIds.has(`${s.storeId}_${s.id}`));
+  const monthLimit=(cfg.otMonthlyLimit||OT_MONTHLY_DEFAULT)*60;
+  const yearLimit=(cfg.otYearlyLimit||OT_YEARLY_DEFAULT)*60;
+
   area.innerHTML=selStaff.map(s=>{
-    let totalDays=0,totalMin=0,brkDays=0;
+    let totalDays=0,totalMin=0,brkDays=0,totalOTMin=0;
     const rows=days.map(d=>{
       const dateStr=d.toLocaleDateString('ja-JP'),wd=WDAYS[d.getDay()];
       const w=calcWork(s.storeId,s.id,dateStr);
       const hasBrk=breaks[`${s.storeId}_${s.id}_${dateStr}`];
       const memos=records.filter(r=>r.storeId===s.storeId&&r.staffId===s.id&&r.type==='memo'&&new Date(r.time).toLocaleDateString('ja-JP')===dateStr);
-      if(w.inTime){totalDays++;if(w.workMin)totalMin+=w.workMin;if(hasBrk)brkDays++;}
+      const otMin=calcOvertimeMin(w.workMin);
+      const sp=w.inTime&&w.outTime?calcSpecialHours(w.inTime,w.outTime):{nightMin:0,holidayMin:0,normalMin:0};
+      const isHoliday=d.getDay()===0;
+      if(w.inTime){totalDays++;if(w.workMin)totalMin+=w.workMin;if(hasBrk)brkDays++;totalOTMin+=otMin;}
       const wdColor=d.getDay()===0?'color:#E05050':d.getDay()===6?'color:#2B7BD4':'';
+      const otBadge=otMin>0?`<span style="font-size:10px;color:#993556;">${fmt(otMin)}残業</span>`:'';
+      const nightBadge=sp.nightMin>0?`<span style="font-size:10px;color:#5B3F9E;">深夜${fmt(sp.nightMin)}</span>`:'';
+      const holBadge=isHoliday&&w.inTime?`<span style="font-size:10px;color:#E05050;">休日出勤</span>`:'';
       return `<tr class="${w.inTime?'worked':''}">
         <td style="${wdColor}font-weight:${w.inTime?'500':'400'}">${d.getDate()}日(${wd})</td>
-        <td>${w.inTime?fmtT(w.inTime):'—'}</td><td>${w.outTime?fmtT(w.outTime):'—'}</td>
+        <td>${w.inTime?fmtT(w.inTime):'—'}</td>
+        <td>${w.outTime?fmtT(w.outTime):'—'}</td>
         <td style="font-weight:${w.workMin?'500':'400'}">${fmt(w.workMin)}</td>
+        <td>${otBadge}${nightBadge}${holBadge}</td>
         <td style="text-align:center;">${hasBrk?'<span class="badge b-brk" style="font-size:10px;">取得</span>':'—'}</td>
-        <td style="color:#888;font-size:11px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${memos.map(m=>m.memo).join(' / ')||''}</td>
+        <td style="color:#888;font-size:11px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${memos.map(m=>m.memo).join(' / ')||''}</td>
       </tr>`;
     }).join('');
+
+    // 36協定バー
+    const mPct=Math.min(Math.round(totalOTMin/monthLimit*100),100);
+    const barColor=mPct>=100?'#E05050':mPct>=80?'#EF9F27':'#639922';
+    const otAlert=mPct>=100?`<span style="color:#E05050;font-weight:600;">🚨 上限超過</span>`:mPct>=80?`<span style="color:#EF9F27;font-weight:600;">⚠️ 注意</span>`:`<span style="color:#639922;">✅ 正常</span>`;
+
+    // 賃金計算
+    const wage=calcWage(s.storeId,s.id,year,month);
+    const wageHtml=wage?`
+      <div class="wage-section">
+        <div class="wage-title">💰 賃金計算（管理者確認用）</div>
+        <div class="wage-row"><span class="wage-label">時給</span><span class="wage-val">${fmtYen(wage.hourlyWage)}</span></div>
+        <div class="wage-row"><span class="wage-label">通常勤務（${fmt(wage.normalMin+wage.otMin)}）</span><span class="wage-val">${fmtYen(wage.normalWage+wage.otMin*(wage.hourlyWage/60))}</span></div>
+        <div class="wage-row"><span class="wage-label">　うち残業割増25%（${fmt(wage.otMin)}）</span><span class="wage-val">+${fmtYen(wage.otExtra)}</span></div>
+        <div class="wage-row"><span class="wage-label">深夜割増25%（${fmt(wage.nightMin)}）</span><span class="wage-val">+${fmtYen(wage.nightExtra)}</span></div>
+        <div class="wage-row"><span class="wage-label">休日割増35%（${fmt(wage.holidayMin)}）</span><span class="wage-val">+${fmtYen(wage.holidayExtra)}</span></div>
+        <div class="wage-row"><span class="wage-label">概算合計</span><span class="wage-total">${fmtYen(wage.normalWage+wage.otMin*(wage.hourlyWage/60)+wage.nightExtra+wage.holidayExtra+wage.otExtra)}</span></div>
+      </div>`:'<div style="font-size:11px;color:#888;margin-top:6px;">※ 時給を登録すると賃金計算が表示されます</div>';
+
     return `<div class="staff-report-card">
       <div class="src-header">
         <div><div class="src-name">${s.name}</div><div class="src-store">${s.storeName}</div></div>
         <div class="src-summary">
           <div class="src-sum-item"><div class="src-sum-label">出勤日数</div><div class="src-sum-val">${totalDays}日</div></div>
-          <div class="src-sum-item"><div class="src-sum-label">総勤務時間</div><div class="src-sum-val">${fmt(totalMin)}</div></div>
-          <div class="src-sum-item"><div class="src-sum-label">休憩取得日</div><div class="src-sum-val">${brkDays}日</div></div>
+          <div class="src-sum-item"><div class="src-sum-label">総勤務</div><div class="src-sum-val">${fmt(totalMin)}</div></div>
+          <div class="src-sum-item"><div class="src-sum-label">残業</div><div class="src-sum-val">${fmt(totalOTMin)}</div></div>
+          <div class="src-sum-item"><div class="src-sum-label">36協定</div><div class="src-sum-val">${otAlert}</div></div>
           <button class="dl-btn" onclick="exportCSV(${s.storeId},${s.id},'${s.name}','${s.storeName}',${year},${month})">📥 CSV</button>
         </div>
       </div>
-      <table class="src-tbl"><thead><tr><th>日付</th><th>出勤</th><th>退勤</th><th>勤務時間</th><th>休憩</th><th>メモ</th></tr></thead><tbody>${rows}</tbody></table>
+      <div style="padding:10px 14px;background:#f9f9f9;border-bottom:1px solid #eee;">
+        <div style="font-size:12px;color:#888;margin-bottom:4px;">36協定　今月の残業：${fmt(totalOTMin)} / 上限${fmt(monthLimit)}（${mPct}%）</div>
+        <div class="ot-bar-wrap"><div class="ot-bar" style="width:${mPct}%;background:${barColor};"></div></div>
+        ${wageHtml}
+      </div>
+      <table class="src-tbl">
+        <thead><tr><th>日付</th><th>出勤</th><th>退勤</th><th>勤務時間</th><th>残業・割増</th><th>休憩</th><th>メモ</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
     </div>`;
   }).join('');
 }
 
 window.exportCSV=function(storeId,staffId,staffName,storeName,year,month){
   const days=getMonthDays(year,month);
-  const csvRows=[['日付','曜日','出勤','退勤','勤務時間(分)','勤務時間','休憩取得','メモ']];
+  const csvRows=[['日付','曜日','出勤','退勤','勤務時間(分)','残業(分)','深夜(分)','休日出勤(分)','休憩取得','メモ']];
   days.forEach(d=>{
     const dateStr=d.toLocaleDateString('ja-JP'),wd=WDAYS[d.getDay()];
     const w=calcWork(storeId,staffId,dateStr);
     const hasBrk=breaks[`${storeId}_${staffId}_${dateStr}`];
     const memos=records.filter(r=>r.storeId===storeId&&r.staffId===staffId&&r.type==='memo'&&new Date(r.time).toLocaleDateString('ja-JP')===dateStr);
-    csvRows.push([dateStr,wd,w.inTime?fmtT(w.inTime):'',w.outTime?fmtT(w.outTime):'',w.workMin?Math.round(w.workMin):'',fmt(w.workMin)==='—'?'':fmt(w.workMin),hasBrk?'取得済み':'',memos.map(m=>m.memo.replace(/,/g,'、')).join(' / ')]);
+    const otMin=calcOvertimeMin(w.workMin);
+    const sp=w.inTime&&w.outTime?calcSpecialHours(w.inTime,w.outTime):{nightMin:0,holidayMin:0};
+    csvRows.push([dateStr,wd,w.inTime?fmtT(w.inTime):'',w.outTime?fmtT(w.outTime):'',w.workMin?Math.round(w.workMin):'',otMin?Math.round(otMin):'',sp.nightMin?Math.round(sp.nightMin):'',sp.holidayMin?Math.round(sp.holidayMin):'',hasBrk?'取得済み':'',memos.map(m=>m.memo.replace(/,/g,'、')).join(' / ')]);
   });
   dlCSV(csvRows,`${year}年${month}月_${storeName}_${staffName}.csv`);
   showToast(`${staffName}の${year}年${month}月データをダウンロードしました`);
@@ -716,14 +946,20 @@ window.exportAllCSV=function(){
   const stores=sf?cfg.stores.filter(s=>s.id==sf):cfg.stores;
   const selStaff=stores.flatMap(store=>(cfg.staff[store.id]||[]).map(s=>({...s,storeId:store.id,storeName:store.name}))).filter(s=>selectedStaffIds.has(`${s.storeId}_${s.id}`));
   const days=getMonthDays(year,month);
-  const csvRows=[['店舗','スタッフ','日付','曜日','出勤','退勤','勤務時間(分)','勤務時間','休憩取得','メモ']];
-  selStaff.forEach(s=>days.forEach(d=>{
-    const dateStr=d.toLocaleDateString('ja-JP'),wd=WDAYS[d.getDay()];
-    const w=calcWork(s.storeId,s.id,dateStr);
-    const hasBrk=breaks[`${s.storeId}_${s.id}_${dateStr}`];
-    const memos=records.filter(r=>r.storeId===s.storeId&&r.staffId===s.id&&r.type==='memo'&&new Date(r.time).toLocaleDateString('ja-JP')===dateStr);
-    csvRows.push([s.storeName,s.name,dateStr,wd,w.inTime?fmtT(w.inTime):'',w.outTime?fmtT(w.outTime):'',w.workMin?Math.round(w.workMin):'',fmt(w.workMin)==='—'?'':fmt(w.workMin),hasBrk?'取得済み':'',memos.map(m=>m.memo.replace(/,/g,'、')).join(' / ')]);
-  }));
+  const csvRows=[['店舗','スタッフ','時給','日付','曜日','出勤','退勤','勤務時間(分)','残業(分)','深夜(分)','休日出勤(分)','休憩取得','メモ']];
+  selStaff.forEach(s=>{
+    const staffData=(cfg.staff[s.storeId]||[]).find(x=>x.id===s.id);
+    const wage=staffData?.hourlyWage||'';
+    days.forEach(d=>{
+      const dateStr=d.toLocaleDateString('ja-JP'),wd=WDAYS[d.getDay()];
+      const w=calcWork(s.storeId,s.id,dateStr);
+      const hasBrk=breaks[`${s.storeId}_${s.id}_${dateStr}`];
+      const memos=records.filter(r=>r.storeId===s.storeId&&r.staffId===s.id&&r.type==='memo'&&new Date(r.time).toLocaleDateString('ja-JP')===dateStr);
+      const otMin=calcOvertimeMin(w.workMin);
+      const sp=w.inTime&&w.outTime?calcSpecialHours(w.inTime,w.outTime):{nightMin:0,holidayMin:0};
+      csvRows.push([s.storeName,s.name,wage,dateStr,wd,w.inTime?fmtT(w.inTime):'',w.outTime?fmtT(w.outTime):'',w.workMin?Math.round(w.workMin):'',otMin?Math.round(otMin):'',sp.nightMin?Math.round(sp.nightMin):'',sp.holidayMin?Math.round(sp.holidayMin):'',hasBrk?'取得済み':'',memos.map(m=>m.memo.replace(/,/g,'、')).join(' / ')]);
+    });
+  });
   dlCSV(csvRows,`${year}年${month}月_勤怠データ一括.csv`);
   showToast(`${year}年${month}月の一括CSVをダウンロードしました`);
 }
@@ -789,16 +1025,39 @@ function renderSettings(){
   document.getElementById('new-staff-store').innerHTML='<option value="">店舗を選択</option>'+cfg.stores.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
   document.getElementById('staff-list').innerHTML=cfg.stores.flatMap(store=>(cfg.staff[store.id]||[]).map(s=>{
     const st=getSt(`${store.id}_${s.id}`);
-    return `<tr><td>${store.name}</td><td>${s.name}</td><td>${st==='in'?'<span class="badge b-in">出勤中</span>':'<span style="color:#888;font-size:11px;">退勤</span>'}</td><td><button class="del-btn" onclick="delStaff(${store.id},${s.id})">削除</button></td></tr>`;
+    const wage=s.hourlyWage?`¥${s.hourlyWage}/h`:'未設定';
+    return `<tr><td>${store.name}</td><td>${s.name}</td><td style="color:${s.hourlyWage?'#333':'#aaa'}">${wage}</td><td>${st==='in'?'<span class="badge b-in">出勤中</span>':'<span style="color:#888;font-size:11px;">退勤</span>'}</td><td><button class="del-btn" onclick="delStaff(${store.id},${s.id})">削除</button></td></tr>`;
   })).join('');
+  document.getElementById('ot-monthly-limit').value=cfg.otMonthlyLimit||OT_MONTHLY_DEFAULT;
+  document.getElementById('ot-yearly-limit').value=cfg.otYearlyLimit||OT_YEARLY_DEFAULT;
+  document.getElementById('reg-hours').value=cfg.regHours||REG_HOURS_DEFAULT;
 }
 
 window.addStore=async function(){const name=document.getElementById('new-store-name').value.trim();if(!name)return;const id=cfg.nextStoreId++;cfg.stores.push({id,name});cfg.staff[id]=[];await saveCfg();showToast(`「${name}」を追加しました`);document.getElementById('new-store-name').value='';renderSettings();}
 window.delStore=async function(id){if((cfg.staff[id]||[]).length>0){showToast('スタッフがいる店舗は削除できません');return;}cfg.stores=cfg.stores.filter(s=>s.id!==id);delete cfg.staff[id];await saveCfg();showToast('店舗を削除しました');renderSettings();}
-window.addStaff=async function(){const sid=parseInt(document.getElementById('new-staff-store').value);const name=document.getElementById('new-staff-name').value.trim();if(!sid||!name)return;const id=cfg.nextStaffId++;if(!cfg.staff[sid])cfg.staff[sid]=[];cfg.staff[sid].push({id,name});await saveCfg();showToast(`「${name}」を登録しました`);document.getElementById('new-staff-name').value='';renderSettings();}
+window.addStaff=async function(){
+  const sid=parseInt(document.getElementById('new-staff-store').value);
+  const name=document.getElementById('new-staff-name').value.trim();
+  const wage=parseInt(document.getElementById('new-staff-wage').value)||0;
+  if(!sid||!name)return;
+  const id=cfg.nextStaffId++;
+  if(!cfg.staff[sid])cfg.staff[sid]=[];
+  cfg.staff[sid].push({id,name,hourlyWage:wage});
+  await saveCfg();showToast(`「${name}」を登録しました`);
+  document.getElementById('new-staff-name').value='';
+  document.getElementById('new-staff-wage').value='';
+  renderSettings();
+}
 window.delStaff=async function(storeId,staffId){cfg.staff[storeId]=(cfg.staff[storeId]||[]).filter(s=>s.id!==staffId);await saveCfg();showToast('スタッフを削除しました');renderSettings();}
 window.changeAdminPass=async function(){const p=document.getElementById('new-admin-pass').value;if(p.length<6){showToast('パスワードは6文字以上');return;}cfg.adminPass=p;await saveCfg();document.getElementById('new-admin-pass').value='';showToast('管理者パスワードを変更しました');}
 window.changeStaffPass=async function(){const p=document.getElementById('new-staff-pass').value;if(p.length<4){showToast('パスワードは4文字以上');return;}cfg.staffPass=p;await saveCfg();document.getElementById('new-staff-pass').value='';showToast('スタッフパスワードを変更しました');}
+window.save36Settings=async function(){
+  const ml=parseInt(document.getElementById('ot-monthly-limit').value)||OT_MONTHLY_DEFAULT;
+  const yl=parseInt(document.getElementById('ot-yearly-limit').value)||OT_YEARLY_DEFAULT;
+  const rh=parseInt(document.getElementById('reg-hours').value)||REG_HOURS_DEFAULT;
+  cfg.otMonthlyLimit=ml;cfg.otYearlyLimit=yl;cfg.regHours=rh;
+  await saveCfg();showToast('36協定の設定を保存しました');render36Alerts();
+}
 
 function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800);}
 function updateClock(){const now=new Date();const e=document.getElementById('s-clk');if(e)e.textContent=now.toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});const d=document.getElementById('s-dt');if(d)d.textContent=now.toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric',weekday:'short'});}
