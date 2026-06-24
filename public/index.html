@@ -632,9 +632,6 @@
             <button class="nav-item" data-view="logs" onclick="window._adminNav(this,'logs')">
               <span class="nav-icon">≡</span> 打刻ログ
             </button>
-            <button class="nav-item" data-view="correction" onclick="window._adminNav(this,'correction')">
-              <span class="nav-icon">✎</span> 打刻修正
-            </button>
             <button class="nav-item" data-view="settings" onclick="window._adminNav(this,'settings')">
               <span class="nav-icon">⚙</span> 設定
             </button>
@@ -659,7 +656,6 @@
     else if (view === 'daily') await renderDailySummary();
     else if (view === 'memos') await renderMemos();
     else if (view === 'logs') await renderLogs();
-    else if (view === 'correction') await renderCorrection();
     else if (view === 'settings') await renderSettings();
   };
 
@@ -768,7 +764,6 @@
           <input type="number" id="edit-break" class="form-input" value="${rec.breakMinutes || 0}" min="0">
         </div>
         <div class="modal-actions">
-          <button class="btn-secondary" onclick="window._viewCorrectionHistory('${recordId}')">修正履歴を見る</button>
           <button class="btn-secondary" onclick="this.closest('.modal-overlay').remove()">キャンセル</button>
           <button class="btn-primary" onclick="window._saveEdit('${recordId}','${rec.date}')">保存</button>
         </div>
@@ -780,14 +775,6 @@
     const inVal = document.getElementById('edit-in').value;
     const outVal = document.getElementById('edit-out').value;
     const breakVal = parseInt(document.getElementById('edit-break').value) || 0;
-
-    // 修正前の値を取得（履歴用）
-    const beforeSnap = await getDoc(doc(db, 'attendance', recordId));
-    const before = beforeSnap.exists() ? beforeSnap.data() : {};
-    const beforeIn = before.clockIn ? formatTime(before.clockIn.toDate ? before.clockIn.toDate() : new Date(before.clockIn)) : '--:--';
-    const beforeOut = before.clockOut ? formatTime(before.clockOut.toDate ? before.clockOut.toDate() : new Date(before.clockOut)) : '--:--';
-    const beforeBreak = before.breakMinutes || 0;
-
     const updates = { breakMinutes: breakVal };
     if (inVal) {
       const d = new Date(date + 'T' + inVal + ':00');
@@ -798,23 +785,8 @@
       updates.clockOut = Timestamp.fromDate(d);
     }
     await updateDoc(doc(db, 'attendance', recordId), updates);
-
-    // 修正履歴を記録
-    await addDoc(collection(db, 'correctionLogs'), {
-      recordId, staffId: before.staffId || null, storeId: before.storeId || null,
-      date: before.date || date,
-      editorId: currentUser?.id || 'admin', editorName: currentUser?.name || '管理者',
-      before: { clockIn: beforeIn, clockOut: beforeOut, breakMinutes: beforeBreak },
-      after: { clockIn: inVal || beforeIn, clockOut: outVal || beforeOut, breakMinutes: breakVal },
-      createdAt: serverTimestamp()
-    });
-
     document.querySelector('.modal-overlay')?.remove();
     showSuccess('打刻を修正しました');
-    // 打刻修正画面を開いている場合は再描画
-    if (currentView === 'admin' && document.getElementById('correction-results')) {
-      window._searchCorrection && window._searchCorrection();
-    }
   };
 
   // 月次レポート
@@ -1104,183 +1076,6 @@
         </table>
       </div>`;
   }
-
-  // 打刻修正（過去日付検索つき）
-  async function renderCorrection() {
-    const content = document.getElementById('admin-content');
-    const stores = await getAllStores();
-    const allStaff = await getAllStaff();
-    const storeMap = {}; stores.forEach(s => storeMap[s.id] = s.name);
-    const staffMap = {}; allStaff.forEach(s => staffMap[s.id] = s);
-
-    const today = getToday();
-    const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7);
-    const weekAgoStr = `${weekAgo.getFullYear()}-${String(weekAgo.getMonth()+1).padStart(2,'0')}-${String(weekAgo.getDate()).padStart(2,'0')}`;
-
-    content.innerHTML = `
-      <div class="admin-view">
-        <div class="admin-view-header">
-          <h2 class="admin-view-title">打刻修正</h2>
-          <div class="admin-view-date">スタッフ・日付を指定して過去の打刻を検索・修正できます</div>
-        </div>
-
-        <div class="correction-search-bar">
-          <div class="form-group">
-            <label class="form-label">期間（開始）</label>
-            <input type="date" id="corr-from" class="form-input-sm" value="${weekAgoStr}">
-          </div>
-          <div class="form-group">
-            <label class="form-label">期間（終了）</label>
-            <input type="date" id="corr-to" class="form-input-sm" value="${today}">
-          </div>
-          <div class="form-group">
-            <label class="form-label">店舗</label>
-            <select id="corr-store" class="form-input-sm">
-              <option value="all">全店舗</option>
-              ${stores.map(s => `<option value="${s.id}">${s.name}</option>`).join('')}
-            </select>
-          </div>
-          <div class="form-group">
-            <label class="form-label">スタッフ</label>
-            <select id="corr-staff" class="form-input-sm">
-              <option value="all">全スタッフ</option>
-              ${allStaff.map(s => `<option value="${s.id}">${s.name}</option>`).join('')}
-            </select>
-          </div>
-          <button class="btn-primary btn-sm" onclick="window._searchCorrection()">検索</button>
-        </div>
-
-        <div id="correction-results"></div>
-      </div>`;
-
-    // 店舗を選んだらスタッフを絞り込む
-    document.getElementById('corr-store').addEventListener('change', (e) => {
-      const storeId = e.target.value;
-      const staffSelect = document.getElementById('corr-staff');
-      const filtered = storeId === 'all' ? allStaff : allStaff.filter(s => s.storeId === storeId);
-      staffSelect.innerHTML = `<option value="all">全スタッフ</option>` +
-        filtered.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
-    });
-
-    window._searchCorrection = async function() {
-      const from = document.getElementById('corr-from').value;
-      const to = document.getElementById('corr-to').value;
-      const storeFilter = document.getElementById('corr-store').value;
-      const staffFilter = document.getElementById('corr-staff').value;
-      await loadCorrectionResults(from, to, storeFilter, staffFilter, staffMap, storeMap);
-    };
-
-    await window._searchCorrection();
-  }
-
-  async function loadCorrectionResults(from, to, storeFilter, staffFilter, staffMap, storeMap) {
-    const el = document.getElementById('correction-results');
-    el.innerHTML = '<div class="loading-inner">検索中...</div>';
-
-    if (!from || !to) {
-      el.innerHTML = '<p class="empty-msg">開始日と終了日を指定してください</p>';
-      return;
-    }
-
-    let q;
-    if (staffFilter !== 'all') {
-      q = query(collection(db, 'attendance'),
-        where('staffId', '==', staffFilter),
-        where('date', '>=', from), where('date', '<=', to));
-    } else {
-      q = query(collection(db, 'attendance'),
-        where('date', '>=', from), where('date', '<=', to));
-    }
-
-    const snap = await getDocs(q);
-    let records = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-    if (storeFilter !== 'all') {
-      records = records.filter(r => r.storeId === storeFilter);
-    }
-
-    // 日付降順 → スタッフ名昇順
-    records.sort((a, b) => {
-      if (a.date !== b.date) return b.date.localeCompare(a.date);
-      const an = staffMap[a.staffId]?.name || a.staffId;
-      const bn = staffMap[b.staffId]?.name || b.staffId;
-      return an.localeCompare(bn);
-    });
-
-    if (records.length === 0) {
-      el.innerHTML = '<p class="empty-msg">該当する打刻データがありません</p>';
-      return;
-    }
-
-    const rows = records.map(r => {
-      const staff = staffMap[r.staffId] || { name: r.staffId };
-      const inn = r.clockIn ? (r.clockIn.toDate ? r.clockIn.toDate() : new Date(r.clockIn)) : null;
-      const out = r.clockOut ? (r.clockOut.toDate ? r.clockOut.toDate() : new Date(r.clockOut)) : null;
-      const status = !inn ? 'off' : out ? 'done' : r.onBreak ? 'break' : 'on';
-      const labels = { off: '未出勤', done: '退勤済', break: '休憩中', on: '出勤中' };
-      const badges = { off: 'badge-off', done: 'badge-done', break: 'badge-break', on: 'badge-on' };
-      return `<tr>
-        <td class="mono">${r.date}</td>
-        <td>${staff.name}</td>
-        <td>${storeMap[r.storeId] || r.storeId}</td>
-        <td><span class="table-badge ${badges[status]}">${labels[status]}</span></td>
-        <td>${inn ? formatTime(inn) : '--:--'}</td>
-        <td>${out ? formatTime(out) : '--:--'}</td>
-        <td>${r.breakMinutes || 0}m</td>
-        <td>
-          <button class="btn-sm" onclick="window._editRecord('${r.id}')">修正</button>
-          <button class="btn-sm" onclick="window._viewCorrectionHistory('${r.id}')">履歴</button>
-        </td>
-      </tr>`;
-    }).join('');
-
-    el.innerHTML = `
-      <div class="table-wrap">
-        <table class="data-table">
-          <thead><tr>
-            <th>日付</th><th>スタッフ</th><th>店舗</th><th>状態</th>
-            <th>出勤</th><th>退勤</th><th>休憩</th><th>操作</th>
-          </tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </div>
-      <p class="correction-result-count">${records.length}件の打刻データ</p>`;
-  }
-
-  // 修正履歴の表示
-  window._viewCorrectionHistory = async function(recordId) {
-    const q = query(collection(db, 'correctionLogs'), where('recordId', '==', recordId), orderBy('createdAt', 'desc'));
-    const snap = await getDocs(q);
-    const histories = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-    const modal = document.createElement('div');
-    modal.className = 'modal-overlay';
-    modal.innerHTML = `
-      <div class="modal-card modal-card-wide">
-        <h3 class="modal-title">修正履歴</h3>
-        ${histories.length === 0 ? '<p class="empty-msg-sm">この打刻はまだ修正されていません</p>' :
-          `<div class="history-list">
-            ${histories.map(h => {
-              const ts = h.createdAt ? (h.createdAt.toDate ? h.createdAt.toDate() : new Date(h.createdAt)) : null;
-              return `<div class="history-item">
-                <div class="history-meta">
-                  <span class="history-editor">${h.editorName || h.editorId}</span>
-                  <span class="history-time">${ts ? formatDate(ts) + ' ' + formatTime(ts) : ''}</span>
-                </div>
-                <div class="history-diff">
-                  <span class="history-before">出勤 ${h.before.clockIn} / 退勤 ${h.before.clockOut} / 休憩 ${h.before.breakMinutes}m</span>
-                  <span class="history-arrow">→</span>
-                  <span class="history-after">出勤 ${h.after.clockIn} / 退勤 ${h.after.clockOut} / 休憩 ${h.after.breakMinutes}m</span>
-                </div>
-              </div>`;
-            }).join('')}
-          </div>`}
-        <div class="modal-actions">
-          <button class="btn-secondary" onclick="this.closest('.modal-overlay').remove()">閉じる</button>
-        </div>
-      </div>`;
-    document.body.appendChild(modal);
-  };
 
   // 設定
   async function renderSettings() {
@@ -1940,30 +1735,6 @@ select.form-input { appearance: none; }
 }
 .modal-title { font-family: var(--font-display); font-size: 1.15rem; }
 .modal-actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
-
-/* ─── 打刻修正検索 ──────────────────────────────────────────── */
-.correction-search-bar {
-  display: flex; gap: 14px; align-items: flex-end; flex-wrap: wrap;
-  background: var(--surface); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 18px 20px;
-}
-.correction-search-bar .form-group { gap: 4px; }
-.correction-result-count { font-size: 0.8rem; color: var(--text-3); margin-top: 8px; text-align: right; }
-
-/* ─── 修正履歴モーダル ──────────────────────────────────────── */
-.modal-card-wide { max-width: 560px; }
-.history-list { display: flex; flex-direction: column; gap: 10px; max-height: 320px; overflow-y: auto; }
-.history-item {
-  border: 1px solid var(--border); border-radius: var(--radius-sm);
-  padding: 10px 14px; background: var(--bg3);
-}
-.history-meta { display: flex; justify-content: space-between; margin-bottom: 6px; }
-.history-editor { font-size: 0.82rem; color: var(--accent); font-weight: 600; }
-.history-time { font-size: 0.75rem; color: var(--text-3); font-family: var(--font-mono); }
-.history-diff { display: flex; align-items: center; gap: 10px; font-size: 0.8rem; flex-wrap: wrap; }
-.history-before { color: var(--text-3); text-decoration: line-through; }
-.history-arrow { color: var(--accent); }
-.history-after { color: var(--text); font-weight: 500; }
 
 /* ─── ユーティリティ ────────────────────────────────────────── */
 .mono { font-family: var(--font-mono); }
