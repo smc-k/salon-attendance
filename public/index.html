@@ -38,6 +38,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .err{font-size:12px;color:#c00;margin-top:6px;display:none;}
 .hint{margin-top:1rem;padding:10px 12px;background:#f5f5f5;border-radius:8px;font-size:11px;color:#888;line-height:1.8;}
 
+.staff-select-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-top:6px;max-height:50vh;overflow-y:auto;}
+.staff-select-card{display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px 8px;border-radius:12px;border:1px solid #e0e0e0;background:#f9f9f9;cursor:pointer;transition:all 0.15s;}
+.staff-select-card:hover{border-color:#ED93B1;background:#FBEAF0;}
+.staff-select-avatar{width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:500;flex-shrink:0;}
+.staff-select-name{font-size:12px;font-weight:500;text-align:center;word-break:break-all;}
+
 /* STAFF */
 .staff-layout{display:grid;grid-template-columns:1fr 1fr;gap:1rem;}
 @media(max-width:640px){.staff-layout{grid-template-columns:1fr;}}
@@ -206,12 +212,21 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <div class="role-card" id="rc-staff" onclick="pickRole('staff')"><div class="rc-icon">👤</div><div class="rc-label">スタッフ</div><div class="rc-desc">出退勤・メモ</div></div>
       </div>
       <div id="l-staff-pick" style="display:none;">
-        <div class="field"><label>店舗</label><select id="l-store" onchange="onLStore()"><option value="">店舗を選択</option></select></div>
-        <div class="field" id="l-sf-field" style="display:none;"><label>スタッフ</label><select id="l-staff"><option value="">スタッフを選択</option></select></div>
+        <div class="field"><label>店舗</label><select id="l-store"><option value="">店舗を選択</option></select></div>
       </div>
       <div class="field" id="l-pass-field" style="display:none;"><label>パスワード</label><input type="password" id="l-pass" placeholder="パスワードを入力" onkeydown="if(event.key==='Enter')doLogin()"/></div>
       <div class="err" id="l-err">パスワードが違います</div>
       <button class="login-btn" id="l-btn" onclick="doLogin()" style="display:none;">ログイン</button>
+    </div>
+  </div>
+
+  <!-- STAFF SELECT（店舗＋共通パスワード認証後、スタッフ本人を選ぶ画面） -->
+  <div id="v-staff-select" class="login-wrap" style="display:none;">
+    <div class="login-card" style="width:440px;">
+      <div class="login-title">スタッフを選択</div>
+      <div class="login-sub" id="ss-store-label"></div>
+      <div id="staff-select-grid" class="staff-select-grid"></div>
+      <button class="logout-btn" style="margin-top:16px;width:100%;padding:9px;" onclick="backToLogin()">← 店舗選択に戻る</button>
     </div>
   </div>
 
@@ -413,6 +428,7 @@ let breaks = {};
 let cu = null, selRole = null, uiIv = null;
 let selectedStaffIds = new Set();
 let editingRecordId = null;
+let pendingStore = null; // 店舗＋共通パスワード認証後、スタッフ選択待ちの店舗情報
 
 const todayStr = () => new Date().toLocaleDateString('ja-JP');
 const fmtT = iso => new Date(iso).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
@@ -474,47 +490,86 @@ window.pickRole = function(r) {
   document.getElementById('l-err').style.display='none';
   if(r==='staff'){
     document.getElementById('l-store').innerHTML='<option value="">店舗を選択</option>'+cfg.stores.map(x=>`<option value="${x.id}">${x.name}</option>`).join('');
-    document.getElementById('l-sf-field').style.display='none';
   }
   document.getElementById('l-pass').value='';
   document.getElementById('l-pass').focus();
 }
 
-window.onLStore = function() {
-  const sid=document.getElementById('l-store').value, sf=document.getElementById('l-sf-field');
-  if(sid&&(cfg.staff[sid]||[]).length){
-    sf.style.display='block';
-    document.getElementById('l-staff').innerHTML='<option value="">スタッフを選択</option>'+(cfg.staff[sid]||[]).map(x=>`<option value="${x.id}">${x.name}</option>`).join('');
-  } else sf.style.display='none';
-}
-
 window.doLogin = async function() {
   if(!selRole) return;
   const pass=document.getElementById('l-pass').value, err=document.getElementById('l-err');
+  err.style.display='none'; err.textContent='パスワードが違います';
+
   if(selRole==='admin'){
     if(pass!==cfg.adminPass){err.style.display='block';return;}
-    cu={role:'admin'};showAdmin();
-  } else {
-    if(pass!==cfg.staffPass){err.style.display='block';return;}
-    const sid=parseInt(document.getElementById('l-store').value), stid=parseInt(document.getElementById('l-staff').value);
-    if(!sid||!stid){err.textContent='店舗とスタッフを選んでください';err.style.display='block';return;}
-    const store=cfg.stores.find(x=>x.id===sid), staff=(cfg.staff[sid]||[]).find(x=>x.id===stid);
-    if(!store||!staff) return;
-    cu={role:'staff',storeId:sid,storeName:store.name,staffId:stid,staffName:staff.name};
-    showStaff();
+    cu={role:'admin'};
+    showAdmin();
+    document.getElementById('v-login').style.display='none';
+    document.getElementById('hdr').style.display='flex';
+    document.getElementById('hdr-name').textContent='管理者';
+    document.getElementById('hdr-role').textContent='管理者';
+    document.getElementById('hdr-role').className='rpill r-admin';
+    return;
   }
-  err.style.display='none'; err.textContent='パスワードが違います';
+
+  // スタッフ：店舗＋共通パスワードのみで認証 → 本人をスタッフ選択画面で選んでもらう
+  if(pass!==cfg.staffPass){err.style.display='block';return;}
+  const sid=parseInt(document.getElementById('l-store').value);
+  if(!sid){err.textContent='店舗を選んでください';err.style.display='block';return;}
+  const store=cfg.stores.find(x=>x.id===sid);
+  if(!store) return;
+  document.getElementById('l-pass').value='';
+  showStaffSelect(sid, store.name);
+}
+
+function showStaffSelect(storeId, storeName) {
+  pendingStore = {storeId, storeName};
   document.getElementById('v-login').style.display='none';
+  document.getElementById('v-staff-select').style.display='flex';
+  document.getElementById('ss-store-label').textContent = `${storeName} のスタッフ一覧から選んでください`;
+  const staffList = cfg.staff[storeId]||[];
+  const grid = document.getElementById('staff-select-grid');
+  if(!staffList.length){
+    grid.innerHTML = '<div class="empty">この店舗にはスタッフが登録されていません</div>';
+    return;
+  }
+  grid.innerHTML = staffList.map(s=>{
+    const ai = s.id % AVB.length;
+    return `<div class="staff-select-card" onclick="selectStaffLogin(${s.id})">
+      <div class="staff-select-avatar" style="background:${AVB[ai]};color:${AVT[ai]}">${s.name.replace(/\s/g,'').slice(0,2)}</div>
+      <div class="staff-select-name">${s.name}</div>
+    </div>`;
+  }).join('');
+}
+
+window.selectStaffLogin = function(staffId) {
+  if(!pendingStore) return;
+  const staff = (cfg.staff[pendingStore.storeId]||[]).find(s=>s.id===staffId);
+  if(!staff) return;
+  cu={role:'staff',storeId:pendingStore.storeId,storeName:pendingStore.storeName,staffId:staff.id,staffName:staff.name};
+  pendingStore = null;
+  document.getElementById('v-staff-select').style.display='none';
   document.getElementById('hdr').style.display='flex';
-  document.getElementById('hdr-name').textContent=cu.role==='admin'?'管理者':cu.staffName;
-  document.getElementById('hdr-role').textContent=cu.role==='admin'?'管理者':'スタッフ';
-  document.getElementById('hdr-role').className='rpill '+(cu.role==='admin'?'r-admin':'r-staff');
+  document.getElementById('hdr-name').textContent=cu.staffName;
+  document.getElementById('hdr-role').textContent='スタッフ';
+  document.getElementById('hdr-role').className='rpill r-staff';
+  showStaff();
+}
+
+window.backToLogin = function() {
+  pendingStore = null;
+  document.getElementById('v-staff-select').style.display='none';
+  document.getElementById('v-login').style.display='flex';
+  selRole=null;
+  ['rc-admin','rc-staff'].forEach(id=>document.getElementById(id).className='role-card');
+  ['l-staff-pick','l-pass-field','l-btn'].forEach(id=>document.getElementById(id).style.display='none');
+  document.getElementById('l-pass').value='';
 }
 
 window.logout = function() {
-  cu=null; selRole=null; clearInterval(uiIv);
+  cu=null; selRole=null; pendingStore=null; clearInterval(uiIv);
   document.getElementById('v-login').style.display='flex';
-  ['hdr','v-staff','v-admin'].forEach(id=>document.getElementById(id).style.display='none');
+  ['hdr','v-staff','v-admin','v-staff-select'].forEach(id=>document.getElementById(id).style.display='none');
   ['rc-admin','rc-staff'].forEach(id=>document.getElementById(id).className='role-card');
   ['l-staff-pick','l-pass-field','l-btn'].forEach(id=>document.getElementById(id).style.display='none');
   document.getElementById('l-pass').value='';
