@@ -480,6 +480,16 @@ function calcWork(storeId,staffId,dateStr) {
   return {inTime:inR.time,outTime:outR?outR.time:null,workMin:endT?(endT-new Date(inR.time))/60000:null};
 }
 
+// 休憩45分固定で実労働時間を算出し、実労働8時間（480分）超過分を時間外勤務として計算
+const BREAK_MIN = 45;
+const STD_WORK_MIN = 8 * 60;
+function calcActualAndOvertime(workMin, hasBreak) {
+  if (workMin === null || isNaN(workMin)) return { actualMin: null, otMin: null };
+  const actualMin = Math.max(0, workMin - (hasBreak ? BREAK_MIN : 0));
+  const otMin = Math.max(0, actualMin - STD_WORK_MIN);
+  return { actualMin, otMin };
+}
+
 // ===== LOGIN =====
 window.pickRole = function(r) {
   selRole=r;
@@ -761,20 +771,22 @@ function renderMonthlyReport() {
   const allStaff=stores.flatMap(store=>(cfg.staff[store.id]||[]).map(s=>({...s,storeId:store.id,storeName:store.name})));
   const selStaff=allStaff.filter(s=>selectedStaffIds.has(`${s.storeId}_${s.id}`));
   area.innerHTML=selStaff.map(s=>{
-    let totalDays=0,totalMin=0,brkDays=0;
+    let totalDays=0,totalMin=0,brkDays=0,totalOtMin=0;
     const rows=days.map(d=>{
       const dateStr=d.toLocaleDateString('ja-JP'),wd=WDAYS[d.getDay()];
       const isWeekend=d.getDay()===0||d.getDay()===6;
       const w=calcWork(s.storeId,s.id,dateStr);
-      const hasBrk=breaks[`${s.storeId}_${s.id}_${dateStr}`];
+      const hasBrk=!!breaks[`${s.storeId}_${s.id}_${dateStr}`];
+      const { otMin } = calcActualAndOvertime(w.workMin, hasBrk);
       const memos=records.filter(r=>r.storeId===s.storeId&&r.staffId===s.id&&r.type==='memo'&&new Date(r.time).toLocaleDateString('ja-JP')===dateStr);
-      if(w.inTime){totalDays++;if(w.workMin)totalMin+=w.workMin;if(hasBrk)brkDays++;}
+      if(w.inTime){totalDays++;if(w.workMin)totalMin+=w.workMin;if(otMin!==null)totalOtMin+=otMin;if(hasBrk)brkDays++;}
       const wdColor=d.getDay()===0?'color:#E05050':d.getDay()===6?'color:#2B7BD4':'';
       return `<tr class="${w.inTime?'worked':''}">
         <td style="${wdColor}font-weight:${w.inTime?'500':'400'}">${d.getDate()}日(${wd})</td>
         <td>${w.inTime?fmtT(w.inTime):'—'}</td>
         <td>${w.outTime?fmtT(w.outTime):'—'}</td>
         <td style="font-weight:${w.workMin?'500':'400'}">${fmt(w.workMin)}</td>
+        <td style="color:${otMin>0?'#993C1D':'#888'};font-weight:${otMin>0?'500':'400'}">${otMin!==null&&otMin>0?fmt(otMin):(w.inTime&&w.outTime?'—':'—')}</td>
         <td style="text-align:center;">${hasBrk?'<span class="badge b-brk" style="font-size:10px;">取得</span>':'—'}</td>
         <td style="color:#888;font-size:11px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${memos.map(m=>m.memo).join(' / ')||''}</td>
       </tr>`;
@@ -786,30 +798,83 @@ function renderMonthlyReport() {
           <div class="src-sum-item"><div class="src-sum-label">出勤日数</div><div class="src-sum-val">${totalDays}日</div></div>
           <div class="src-sum-item"><div class="src-sum-label">総勤務時間</div><div class="src-sum-val">${fmt(totalMin)}</div></div>
           <div class="src-sum-item"><div class="src-sum-label">休憩取得日</div><div class="src-sum-val">${brkDays}日</div></div>
+          <div class="src-sum-item"><div class="src-sum-label">時間外勤務</div><div class="src-sum-val" style="${totalOtMin>0?'color:#993C1D;':''}">${totalOtMin>0?fmt(totalOtMin):'0m'}</div></div>
           <button class="dl-btn" onclick="exportCSV(${s.storeId},${s.id},'${s.name}','${s.storeName}',${year},${month})">📥 CSV</button>
         </div>
       </div>
       <table class="src-tbl">
-        <thead><tr><th>日付</th><th>出勤</th><th>退勤</th><th>勤務時間</th><th>休憩</th><th>メモ</th></tr></thead>
+        <thead><tr><th>日付</th><th>出勤</th><th>退勤</th><th>勤務時間</th><th>時間外勤務</th><th>休憩</th><th>メモ</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>`;
   }).join('');
 }
 
-window.exportCSV = function(storeId,staffId,staffName,storeName,year,month) {
-  const days=getMonthDays(year,month);
-  const header=['日付','曜日','出勤','退勤','勤務時間(分)','勤務時間','休憩取得','メモ'];
-  const csvRows=[header];
+// 1名分のサマリー・日別明細・メモ一覧を行配列として生成（個別CSV・一括CSV共通）
+function buildStaffCsvSection(s, year, month, withStoreCol) {
+  const days = getMonthDays(year, month);
+  let totalDays=0, totalMin=0, brkDays=0, totalOtMin=0;
+  const dayRows=[];
+  const memoRows=[];
+
   days.forEach(d=>{
-    const dateStr=d.toLocaleDateString('ja-JP'),wd=WDAYS[d.getDay()];
-    const w=calcWork(storeId,staffId,dateStr);
-    const hasBrk=breaks[`${storeId}_${staffId}_${dateStr}`];
-    const memos=records.filter(r=>r.storeId===storeId&&r.staffId===staffId&&r.type==='memo'&&new Date(r.time).toLocaleDateString('ja-JP')===dateStr);
-    csvRows.push([dateStr,wd,w.inTime?fmtT(w.inTime):'',w.outTime?fmtT(w.outTime):'',w.workMin?Math.round(w.workMin):'',fmt(w.workMin)==='—'?'':fmt(w.workMin),hasBrk?'取得済み':'',memos.map(m=>m.memo.replace(/,/g,'、')).join(' / ')]);
+    const dateStr=d.toLocaleDateString('ja-JP'), wd=WDAYS[d.getDay()];
+    const w=calcWork(s.storeId, s.id, dateStr);
+    const hasBrk=!!breaks[`${s.storeId}_${s.id}_${dateStr}`];
+    const { otMin } = calcActualAndOvertime(w.workMin, hasBrk);
+    const memos=records.filter(r=>r.storeId===s.storeId&&r.staffId===s.id&&r.type==='memo'&&new Date(r.time).toLocaleDateString('ja-JP')===dateStr);
+
+    if (w.inTime) {
+      totalDays++;
+      if (w.workMin) totalMin += w.workMin;
+      if (otMin!==null) totalOtMin += otMin;
+      if (hasBrk) brkDays++;
+    }
+
+    const baseRow = [dateStr, wd,
+      w.inTime?fmtT(w.inTime):'', w.outTime?fmtT(w.outTime):'',
+      w.workMin!==null?fmt(w.workMin):'—',
+      otMin!==null&&otMin>0?fmt(otMin):(w.inTime&&w.outTime?'0m':'—'),
+      hasBrk?'取得済み':''];
+    dayRows.push(withStoreCol ? [s.storeName, s.name, ...baseRow] : baseRow);
+
+    memos.forEach(m => {
+      const memoRow = [dateStr, m.memo.replace(/,/g,'、')];
+      memoRows.push(withStoreCol ? [s.storeName, s.name, ...memoRow] : memoRow);
+    });
   });
+
+  const summaryRow = withStoreCol
+    ? [s.storeName, s.name, `${year}年${month}月`, `${totalDays}日`, fmt(totalMin), `${brkDays}日`, totalOtMin>0?fmt(totalOtMin):'0m']
+    : [s.name, s.storeName, `${year}年${month}月`, `${totalDays}日`, fmt(totalMin), `${brkDays}日`, totalOtMin>0?fmt(totalOtMin):'0m'];
+
+  return { summaryRow, dayRows, memoRows };
+}
+
+function csvEscapeRows(rows) {
+  return rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+}
+
+window.exportCSV = function(storeId,staffId,staffName,storeName,year,month) {
+  const s = { storeId, id: staffId, name: staffName, storeName };
+  const { summaryRow, dayRows, memoRows } = buildStaffCsvSection(s, year, month, false);
+
+  const lines = [];
+  lines.push(csvEscapeRows([['=== サマリー ===']]));
+  lines.push(csvEscapeRows([['スタッフ','店舗','対象月','出勤日数','総勤務時間','休憩取得日数','時間外勤務時間'], summaryRow]));
+  lines.push('');
+  lines.push(csvEscapeRows([['=== 日別明細 ===']]));
+  lines.push(csvEscapeRows([['日付','曜日','出勤','退勤','勤務時間','時間外勤務','休憩取得'], ...dayRows]));
+  lines.push('');
+  lines.push(csvEscapeRows([['=== メモ一覧 ===']]));
+  if (memoRows.length) {
+    lines.push(csvEscapeRows([['日付','メモ内容'], ...memoRows]));
+  } else {
+    lines.push(csvEscapeRows([['日付','メモ内容'], ['','メモはありません']]));
+  }
+
   const bom='\uFEFF';
-  const csv=bom+csvRows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const csv=bom+lines.join('\n');
   const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');a.href=url;a.download=`${year}年${month}月_${storeName}_${staffName}.csv`;a.click();URL.revokeObjectURL(url);
@@ -824,20 +889,31 @@ window.exportAllCSV = function() {
   const stores=storeFilter?cfg.stores.filter(s=>s.id==storeFilter):cfg.stores;
   const allStaff=stores.flatMap(store=>(cfg.staff[store.id]||[]).map(s=>({...s,storeId:store.id,storeName:store.name})));
   const selStaff=allStaff.filter(s=>selectedStaffIds.has(`${s.storeId}_${s.id}`));
-  const days=getMonthDays(year,month);
-  const header=['店舗','スタッフ','日付','曜日','出勤','退勤','勤務時間(分)','勤務時間','休憩取得','メモ'];
-  const csvRows=[header];
+
+  const allSummary=[], allDay=[], allMemo=[];
   selStaff.forEach(s=>{
-    days.forEach(d=>{
-      const dateStr=d.toLocaleDateString('ja-JP'),wd=WDAYS[d.getDay()];
-      const w=calcWork(s.storeId,s.id,dateStr);
-      const hasBrk=breaks[`${s.storeId}_${s.id}_${dateStr}`];
-      const memos=records.filter(r=>r.storeId===s.storeId&&r.staffId===s.id&&r.type==='memo'&&new Date(r.time).toLocaleDateString('ja-JP')===dateStr);
-      csvRows.push([s.storeName,s.name,dateStr,wd,w.inTime?fmtT(w.inTime):'',w.outTime?fmtT(w.outTime):'',w.workMin?Math.round(w.workMin):'',fmt(w.workMin)==='—'?'':fmt(w.workMin),hasBrk?'取得済み':'',memos.map(m=>m.memo.replace(/,/g,'、')).join(' / ')]);
-    });
+    const { summaryRow, dayRows, memoRows } = buildStaffCsvSection(s, year, month, true);
+    allSummary.push(summaryRow);
+    allDay.push(...dayRows);
+    allMemo.push(...memoRows);
   });
+
+  const lines = [];
+  lines.push(csvEscapeRows([['=== サマリー ===']]));
+  lines.push(csvEscapeRows([['店舗','スタッフ','対象月','出勤日数','総勤務時間','休憩取得日数','時間外勤務時間'], ...allSummary]));
+  lines.push('');
+  lines.push(csvEscapeRows([['=== 日別明細 ===']]));
+  lines.push(csvEscapeRows([['店舗','スタッフ','日付','曜日','出勤','退勤','勤務時間','時間外勤務','休憩取得'], ...allDay]));
+  lines.push('');
+  lines.push(csvEscapeRows([['=== メモ一覧 ===']]));
+  if (allMemo.length) {
+    lines.push(csvEscapeRows([['店舗','スタッフ','日付','メモ内容'], ...allMemo]));
+  } else {
+    lines.push(csvEscapeRows([['店舗','スタッフ','日付','メモ内容'], ['','','','メモはありません']]));
+  }
+
   const bom='\uFEFF';
-  const csv=bom+csvRows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const csv=bom+lines.join('\n');
   const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');a.href=url;a.download=`${year}年${month}月_勤怠データ一括.csv`;a.click();URL.revokeObjectURL(url);
